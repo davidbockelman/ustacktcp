@@ -98,6 +98,148 @@ enum SocketState {
     CLOSING
 };
 
+struct TCPHeader {
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint32_t seq_num;
+    uint32_t ack_num;
+    uint8_t data_offset; // 4 bits
+    uint8_t flags;       // 6 bits
+    uint16_t window_size;
+    uint16_t checksum;
+    uint16_t urgent_pointer;
+
+    TCPOptions options;
+
+    ssize_t write(unsigned char* buf) const
+    {
+        memcpy(buf, &src_port, sizeof(src_port));
+        memcpy(buf + 2, &dst_port, sizeof(dst_port));
+        memcpy(buf + 4, &seq_num, sizeof(seq_num));
+        memcpy(buf + 8, &ack_num, sizeof(ack_num));
+        memcpy(buf + 12, &data_offset, sizeof(data_offset));
+        memcpy(buf + 13, &flags, sizeof(flags));
+        memcpy(buf + 14, &window_size, sizeof(window_size));
+        memcpy(buf + 16, &checksum, sizeof(checksum));
+        memcpy(buf + 18, &urgent_pointer, sizeof(urgent_pointer));
+        return 20; // size of TCP header without options
+    }
+};
+
+struct TCPOptions {
+    // To be implemented
+};
+
+struct PseudoIPv4Header {
+    uint32_t src_addr;
+    uint32_t dst_addr;
+    uint8_t zero;
+    uint8_t protocol;
+    uint16_t tcp_length;
+
+    PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t len) :
+        src_addr(src), dst_addr(dst), zero(0), protocol(IPPROTO_TCP), tcp_length(htons(len)) {}
+
+    ssize_t write(unsigned char* buf) const
+    {
+        memcpy(buf, &src_addr, sizeof(src_addr));
+        memcpy(buf + 4, &dst_addr, sizeof(dst_addr));
+        memcpy(buf + 8, &zero, sizeof(zero));
+        memcpy(buf + 9, &protocol, sizeof(protocol));
+        memcpy(buf + 10, &tcp_length, sizeof(tcp_length));
+        return 12;
+    }
+};
+
+struct TCPData {
+    const unsigned char* payload;
+    size_t payload_len;
+
+    TCPData(const unsigned char* p, size_t len) : payload(p), payload_len(len) {}
+};
+
+struct ChecksumBuilder {
+    private:
+        uint32_t _sum = 0;
+
+    public:
+        void add(const void* buf, size_t len)
+        {
+            const uint16_t* words = static_cast<const uint16_t*>(buf);
+            for (size_t i = 0; i < len / 2; ++i)
+            {
+                _sum += ntohs(words[i]);
+            }
+            if (len % 2)
+            {
+                _sum += ntohs(static_cast<const uint8_t*>(buf)[len - 1] << 8);
+            }
+        }
+
+        uint16_t finalize()
+        {
+            while (_sum >> 16)
+            {
+                _sum = (_sum & 0xFFFF) + (_sum >> 16);
+            }
+            return htons(static_cast<uint16_t>(~_sum));
+        }
+};
+
+struct Frame {
+    private:
+        unsigned char* _buf;
+        size_t _cap;
+        size_t _len;
+
+    public:
+        Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload) {
+
+        }
+
+        bool append(const void* data, size_t len)
+        {
+            if (_len + len > _cap) return false;
+            memcpy(_buf + _len, data, len);
+            _len += len;
+            return true;
+        }
+
+        size_t length() const { return _len; }
+
+        const unsigned char* data() const { return _buf; }
+};
+
+
+void write_tcp_header(unsigned char* buf, const TCPHeader& header, const TCPOptions& options, const unsigned char* payload, size_t payload_len)
+{
+    size_t opt_len = 0; //FIXME: implement options length
+
+    uint8_t hdr_len = sizeof(TCPHeader) + opt_len;
+    uint16_t total_len = hdr_len + payload_len;
+    hdr_len = (hdr_len + 3) / 4; // in 32-bit words
+    hdr_len <<= 4;
+
+    PseudoIPv4Header pseudo_header(0, 0, total_len); // FIXME: set real IPs
+    pseudo_header.write(buf); // FIXME: handle errors
+    
+    memcpy(buf, &header.src_port, sizeof(header.src_port));
+    memcpy(buf + 2, &header.dst_port, sizeof(header.dst_port));
+    memcpy(buf + 4, &header.seq_num, sizeof(header.seq_num));
+    memcpy(buf + 8, &header.ack_num, sizeof(header.ack_num));
+    memcpy(buf + 12, &hdr_len, sizeof(hdr_len));
+    memcpy(buf + 13, &header.flags, sizeof(header.flags));
+    memcpy(buf + 14, &header.window_size, sizeof(header.window_size));
+    memset(buf + 16, 0, sizeof(header.checksum)); // checksum set to 0 for calculation
+    memcpy(buf + 18, &header.urgent_pointer, sizeof(header.urgent_pointer));
+    // TODO: write options
+    memcpy(buf + hdr_len, payload, payload_len);
+
+    ChecksumBuilder checksum_builder;
+    
+
+}
+
 class StreamSocket {
     private:
         TCPEngine& _engine;
@@ -112,6 +254,9 @@ class StreamSocket {
         uint32_t _snd_una;
 
         uint32_t _cwnd;
+
+        uint32_t _iss = 0; // FIXME: randomize
+
     public:
         SocketState _state = SocketState::CLOSED;
         StreamSocket() = default;
@@ -122,7 +267,14 @@ class StreamSocket {
             return _engine.bind(addr, this);
         }
 
-        bool connect(const SocketAddr& addr);
+        bool connect(const SocketAddr& addr)
+        {
+            // Send SYN
+
+            // Wait for SYN or SYN-ACK
+            // SYN -> SYN_RECEIVED
+            // SYN-ACK -> ESTABLISHED
+        }
 
         bool listen();
 
