@@ -4,6 +4,19 @@
 
 namespace ustacktcp {
 
+TCPHeader::TCPHeader(const unsigned char* buf)
+{
+    src_port = ntohs(*reinterpret_cast<const uint16_t*>(buf));
+    dst_port = ntohs(*reinterpret_cast<const uint16_t*>(buf + 2));
+    seq_num = ntohl(*reinterpret_cast<const uint32_t*>(buf + 4));
+    ack_num = ntohl(*reinterpret_cast<const uint32_t*>(buf + 8));
+    data_offset = buf[12];
+    flags = buf[13];
+    window_size = ntohs(*reinterpret_cast<const uint16_t*>(buf + 14));
+    checksum = ntohs(*reinterpret_cast<const uint16_t*>(buf + 16));
+    urgent_pointer = ntohs(*reinterpret_cast<const uint16_t*>(buf + 18));
+}
+
 ssize_t TCPHeader::write(unsigned char* buf) const
 {
     memcpy(buf, &src_port, sizeof(src_port));
@@ -56,6 +69,8 @@ ssize_t PseudoIPv4Header::write(unsigned char* buf) const
     memcpy(buf + 10, &tcp_length, sizeof(tcp_length));
     return 12;
 }
+
+
 
 TCPData::TCPData(const unsigned char* p, size_t len)
 :   payload(p), 
@@ -137,6 +152,38 @@ const unsigned char* Frame::getTCPSegmentBuffer() const
 const uint32_t Frame::getDestinationIP() const
 { 
     return _iphdr.dst_addr; 
+}
+
+IPHeader::IPHeader(const unsigned char* buf)
+{
+    version_ihl = buf[0];
+    tos = buf[1];
+    total_length = ntohs(*reinterpret_cast<const uint16_t*>(buf + 2));
+    identification = ntohs(*reinterpret_cast<const uint16_t*>(buf + 4));
+    flags_fragment_offset = ntohs(*reinterpret_cast<const uint16_t*>(buf + 6));
+    ttl = buf[8];
+    protocol = buf[9];
+    header_checksum = ntohs(*reinterpret_cast<const uint16_t*>(buf + 10));
+    src_addr = *reinterpret_cast<const uint32_t*>(buf + 12);
+    dst_addr = *reinterpret_cast<const uint32_t*>(buf + 16);
+}
+
+bool IPHeader::nextProtoIsTCP() const
+{
+    return protocol == IPPROTO_TCP;
+}
+
+size_t IPHeader::getHeaderLength() const
+{
+    return (version_ihl & 0x0F) * 4;
+}
+
+// FIXME: copying
+TCPSegment::TCPSegment(TCPHeader h, TCPOptions o, TCPData d)
+{
+    header = h;
+    options = o;
+    data = d;
 }
 
 }

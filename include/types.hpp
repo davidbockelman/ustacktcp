@@ -32,6 +32,10 @@ struct TCPHeader {
     uint16_t checksum;
     uint16_t urgent_pointer;
 
+    TCPHeader() = default;
+
+    TCPHeader(const unsigned char* buf);
+    
     ssize_t write(unsigned char* buf) const;
 
     static size_t getCheckSumOffset();
@@ -76,6 +80,10 @@ struct TCPData {
     const unsigned char* payload;
     size_t payload_len;
 
+    TCPData() = default;
+    
+    TCPData(const TCPData& other) = default;
+    
     TCPData(const unsigned char* p, size_t len);
 
     ssize_t write(unsigned char* buf) const;
@@ -114,6 +122,36 @@ struct Frame {
 
         const uint32_t getDestinationIP() const;
 
+};
+
+// TODO: include options
+struct IPHeader {
+    uint8_t version_ihl; // Version (4 bits) + Internet header length (4 bits)
+    uint8_t tos;         // Type of service
+    uint16_t total_length;
+    uint16_t identification;
+    uint16_t flags_fragment_offset;
+    uint8_t ttl;        // Time to live
+    uint8_t protocol;
+    uint16_t header_checksum;
+    uint32_t src_addr;
+    uint32_t dst_addr;
+
+    IPHeader() = default;
+
+    IPHeader(const unsigned char* buf);
+
+    bool nextProtoIsTCP() const;
+
+    size_t getHeaderLength() const;
+};
+
+struct TCPSegment {
+    TCPHeader header;
+    TCPOptions options;
+    TCPData data;
+
+    TCPSegment(TCPHeader h, TCPOptions o, TCPData d);
 };
 
 // FIXME: what size int is this?

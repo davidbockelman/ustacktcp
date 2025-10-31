@@ -52,4 +52,35 @@ ssize_t TCPEngine::send(const StreamSocket* sock, const Frame& frame)
     return frame.getTCPSegmentLength();
 }
 
+void TCPEngine::recv() {
+    unsigned char buffer[65536];
+    ssize_t data_size = recvfrom(_raw_fd, buffer, sizeof(buffer), 0, nullptr, nullptr);
+    if (data_size < 0) {
+        perror("TCPEngine::recvfrom");
+        return;
+    }
+    IPHeader ip_header(buffer);
+    if (!ip_header.nextProtoIsTCP()) {
+        // Not a TCP packet
+        return;
+    }
+    TCPHeader tcp_header(buffer + ip_header.getHeaderLength());
+    size_t payload_len = data_size - ip_header.getHeaderLength() - sizeof(TCPHeader);
+    const unsigned char* payload = new unsigned char[payload_len];
+    memcpy((void*)payload, buffer + ip_header.getHeaderLength() + sizeof(TCPHeader), payload_len);
+    TCPData tcp_data(payload, payload_len);
+
+    // FIXME: pass options
+    TCPSegment segment(tcp_header, TCPOptions(), tcp_data);
+    std::cout << "Received packet from "
+                << inet_ntoa(*(in_addr*)&ip_header.src_addr)
+                << ":" << tcp_header.src_port
+                << " to "
+                << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
+                << ":" << tcp_header.dst_port
+                << " of size " << data_size << " bytes."
+                << std::endl;
+    // Process the received TCP segment in 'buffer' of size 'data_size'
+}
+
 }

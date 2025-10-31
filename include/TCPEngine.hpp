@@ -28,6 +28,8 @@ class TCPEngine {
         bool bind(const SocketAddr& addr, StreamSocket* socket);
 
         ssize_t send(const StreamSocket* sock, const Frame& frame);
+
+        void recv();
 };
 
 }
