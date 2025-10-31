@@ -1,0 +1,129 @@
+#pragma once
+
+#include <cstdint>
+#include <cstring>
+#include <unistd.h>
+
+namespace ustacktcp {
+
+
+enum SocketState {
+    CLOSED,
+    LISTEN,
+    SYN_SENT,
+    SYN_RECEIVED,
+    ESTABLISHED,
+    FIN_WAIT_1,
+    FIN_WAIT_2,
+    CLOSE_WAIT,
+    LAST_ACK,
+    TIME_WAIT,
+    CLOSING
+};
+
+struct TCPHeader {
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint32_t seq_num;
+    uint32_t ack_num;
+    uint8_t data_offset; // 4 bits
+    uint8_t flags;       // 6 bits
+    uint16_t window_size;
+    uint16_t checksum;
+    uint16_t urgent_pointer;
+
+    ssize_t write(unsigned char* buf) const;
+
+    static size_t getCheckSumOffset();
+};
+
+struct IPAddr {
+    uint32_t addr;     // IPv4 in network byte order
+
+    IPAddr(uint32_t a);
+
+    bool operator==(const IPAddr& other) const;
+};
+
+struct SocketAddr {
+    IPAddr ip;
+    uint16_t port;     // in network byte order
+
+    SocketAddr(IPAddr i, uint16_t p);
+    SocketAddr();
+
+    bool operator==(const SocketAddr& other) const;
+};
+
+
+struct TCPOptions {
+    // TODO: To be implemented
+};
+
+struct PseudoIPv4Header {
+    uint32_t src_addr;
+    uint32_t dst_addr;
+    uint8_t zero;
+    uint8_t protocol;
+    uint16_t tcp_length;
+
+    PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t tcp_len);
+
+    ssize_t write(unsigned char* buf) const;
+};
+
+struct TCPData {
+    const unsigned char* payload;
+    size_t payload_len;
+
+    TCPData(const unsigned char* p, size_t len);
+
+    ssize_t write(unsigned char* buf) const;
+};
+
+struct InternetChecksumBuilder {
+    private:
+        uint32_t _sum = 0;
+
+    public:
+        void add(const void* buf, size_t len);
+
+        uint16_t finalize();
+};
+
+struct Frame {
+    private:
+        PseudoIPv4Header _iphdr;
+        TCPHeader _tcphdr;
+        TCPData _payload;
+    
+        unsigned char* _buf;
+        size_t _cap;
+        size_t _len;
+
+    public:
+        Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload);
+
+        ssize_t build();
+
+        int computeAndWriteChecksum();
+
+        size_t getTCPSegmentLength() const;
+
+        const unsigned char* getTCPSegmentBuffer() const;
+
+        const uint32_t getDestinationIP() const;
+
+};
+
+// FIXME: what size int is this?
+enum TCPFlag {
+    FIN = 0x01,
+    SYN = 0x02,
+    RST = 0x04,
+    PSH = 0x08,
+    ACK = 0x10,
+    URG = 0x20
+};
+
+}
