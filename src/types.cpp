@@ -1,5 +1,6 @@
 #include <types.hpp>
 
+#include <iostream>
 #include <arpa/inet.h>
 
 namespace ustacktcp {
@@ -57,7 +58,7 @@ PseudoIPv4Header::PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t tcp_len)
     dst_addr(dst), 
     zero(0), 
     protocol(IPPROTO_TCP), 
-    tcp_length(htons(tcp_len)) {}
+    tcp_length(tcp_len) {}
 
 
 ssize_t PseudoIPv4Header::write(unsigned char* buf) const
@@ -85,23 +86,28 @@ ssize_t TCPData::write(unsigned char* buf) const
 void InternetChecksumBuilder::add(const void* buf, size_t len)
 {
     const uint16_t* words = static_cast<const uint16_t*>(buf);
-    for (size_t i = 0; i < len / 2; ++i)
+    while (len > 1)
     {
-        _sum += ntohs(words[i]);
+        _sum += *words++;
+        if (_sum & 0xFFFF0000)
+        {
+            _sum = (_sum & 0xFFFF) + (_sum >> 16);
+        }
+        len -= 2;
     }
-    if (len % 2)
+    if (len > 0)
     {
-        _sum += ntohs(static_cast<const uint8_t*>(buf)[len - 1] << 8);
+        _sum += *(reinterpret_cast<const uint8_t*>(words));
+    }
+    if (_sum & 0xFFFF0000)
+    {
+        _sum = (_sum & 0xFFFF) + (_sum >> 16);
     }
 }
 
 uint16_t InternetChecksumBuilder::finalize()
 {
-    while (_sum >> 16)
-    {
-        _sum = (_sum & 0xFFFF) + (_sum >> 16);
-    }
-    return htons(static_cast<uint16_t>(~_sum));
+    return (uint16_t)(~_sum);
 }
 
 Frame::Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload)

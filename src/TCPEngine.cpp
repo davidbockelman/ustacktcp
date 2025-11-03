@@ -38,7 +38,7 @@ ssize_t TCPEngine::send(const StreamSocket* sock, const Frame& frame)
     // TODO: check socket state
     sockaddr_in dst{};
     dst.sin_family = AF_INET;
-    dst.sin_addr.s_addr = htonl(frame.getDestinationIP());
+    dst.sin_addr.s_addr = frame.getDestinationIP();
     if (sendto(_raw_fd,
                 frame.getTCPSegmentBuffer(), frame.getTCPSegmentLength(),
                 0,
@@ -73,7 +73,7 @@ void TCPEngine::recv() {
         TCPHeader tcp_header(buffer + ip_header.getHeaderLength());
         // TODO: validate checksum
         // TODO: validate ports
-        if (!validTCPPort(tcp_header.src_port) || !validTCPPort(tcp_header.dst_port)) {
+        if (!validTCPPort(tcp_header.src_port) && !validTCPPort(tcp_header.dst_port)) {
             // Not for us
             // std::cout << "TCP packet received for invalid port " << tcp_header.src_port << " " << tcp_header.dst_port << ", skipping." << std::endl;
             continue;
@@ -88,14 +88,14 @@ void TCPEngine::recv() {
         SocketAddr dst_addr(IPAddr(ip_header.dst_addr), tcp_header.dst_port);
         SocketAddr src_addr(IPAddr(ip_header.src_addr), tcp_header.src_port);
 
-        if (bound.find(dst_addr) == bound.end()) {
-            // No socket bound to this address
-            std::cout << "No socket bound to "
-                      << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
-                      << ":" << tcp_header.dst_port
-                      << std::endl;
-            continue;
-        }
+        // if (bound.find(dst_addr) == bound.end()) {
+        //     // No socket bound to this address
+        //     std::cout << "No socket bound to "
+        //               << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
+        //               << ":" << tcp_header.dst_port
+        //               << std::endl;
+        //     continue;
+        // }
 
         std::cout << "Received packet from "
                     << inet_ntoa(*(in_addr*)&ip_header.src_addr)
@@ -106,8 +106,8 @@ void TCPEngine::recv() {
                     << " of size " << data_size << " bytes."
                     << std::endl;
 
-        std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], std::ref(segment), std::ref(src_addr));
-        worker.detach();
+        // std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], std::ref(segment), std::ref(src_addr));
+        // worker.detach();
 
         // Process the received TCP segment in 'buffer' of size 'data_size'
     }

@@ -18,7 +18,7 @@ Frame StreamSocket::createSYNFrame(const SocketAddr& dest_addr)
     tcphdr.checksum = 0;
     tcphdr.urgent_pointer = 0;
 
-    PseudoIPv4Header iphdr(_local_addr.ip.addr, _peer_addr.ip.addr, sizeof(TCPHeader));
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, htons(sizeof(TCPHeader)));
 
     TCPData payload(nullptr, 0);
 
