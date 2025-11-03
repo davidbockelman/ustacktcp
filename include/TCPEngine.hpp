@@ -1,6 +1,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <memory>
 #include <unordered_map>
 #include <StreamSocket.hpp>
 
@@ -16,9 +17,8 @@ struct EndpointHash {
 
 class TCPEngine {
     private:
+        // FIXME: create factory method for StreamSocket
         std::unordered_map<SocketAddr, StreamSocket*, EndpointHash> bound;
-        std::unordered_map<SocketAddr, StreamSocket*, EndpointHash> listeners;
-        std::unordered_map<SocketAddr, StreamSocket*, EndpointHash> connections;
 
         int _raw_fd;
     public:

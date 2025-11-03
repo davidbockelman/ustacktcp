@@ -18,6 +18,10 @@ class StreamSocket {
 
         Frame createSYNFrame(const SocketAddr& dest_addr);
 
+        Frame createSYNACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
+
+        Frame createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
+
     public:
         SocketState _state = SocketState::CLOSED;
         // FIXME: delete this constructor and use factory method
@@ -39,6 +43,8 @@ class StreamSocket {
         ssize_t send(const void* buf, size_t len);
 
         ssize_t recv(void* buf, size_t len);
+
+        void handleSegment(const TCPSegment& segment, const SocketAddr& src_addr);
 };
 
 }
