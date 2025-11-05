@@ -16,7 +16,9 @@ class RecvBuffer {
 
         void build(uint32_t irs);
 
-        ssize_t enqueue(uint32_t seq_num, std::byte* data, size_t len);
+        ssize_t enqueue(uint32_t seq_num, const std::byte* data, size_t len);
+
+        void push(std::byte* dest, size_t& len);
 
         uint32_t getAckNumber() const;
 

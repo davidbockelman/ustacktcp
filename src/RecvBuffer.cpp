@@ -1,6 +1,7 @@
 #include <RecvBuffer.hpp>
 #include <cstring>
 #include <algorithm>
+#include <iostream>
 
 RecvBuffer::RecvBuffer() {}
 
@@ -12,13 +13,13 @@ void RecvBuffer::build(uint32_t irs)
     buf_ = new std::byte[sz_]; // FIXME: hardcoded max size
 }
 
-ssize_t RecvBuffer::enqueue(uint32_t seq_num, std::byte* data, size_t len)
+ssize_t RecvBuffer::enqueue(uint32_t seq_num, const std::byte* data, size_t len)
 {
     if (seq_num < nxt_) // already received
         return 0;
     if (seq_num > nxt_) // out of order
         return -1; // FIXME: add error code
-    auto bLen = (tail_ + sz_ - nxt_) % sz_;
+    auto bLen = (nxt_ + sz_ - tail_) % sz_;
     auto free_sz = sz_ - bLen;
     if (free_sz < len) return -1; // FIXME: add error code
     auto firstBlockSz = std::min(sz_-(nxt_%sz_),len);
@@ -31,6 +32,22 @@ ssize_t RecvBuffer::enqueue(uint32_t seq_num, std::byte* data, size_t len)
     }
     nxt_ += len;
     return len;
+}
+
+void RecvBuffer::push(std::byte* dest, size_t& len)
+{
+    auto avail_sz = availableDataSize();
+    auto to_copy = static_cast<size_t>(avail_sz);
+    auto firstBlockSz = std::min(sz_-(tail_%sz_),to_copy);
+    auto firstBlockStart = buf_+(tail_%sz_);
+    memcpy(dest, firstBlockStart, firstBlockSz);
+    if (firstBlockSz < to_copy)
+    {
+        auto secondBlockSz = to_copy - firstBlockSz;
+        memcpy(dest+firstBlockSz,buf_,secondBlockSz);
+    }
+    tail_ += to_copy;
+    len = to_copy;
 }
 
 uint32_t RecvBuffer::getAckNumber() const

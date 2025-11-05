@@ -104,7 +104,7 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
 {
     // Handle incoming segment based on current state
     // Update state accordingly
-    if (_state != SocketState::LISTEN && _state != SocketState::SYN_SENT && _state != SocketState::SYN_RECEIVED)
+    if (_state != SocketState::LISTEN && _state != SocketState::SYN_SENT && _state != SocketState::SYN_RECEIVED && _state != SocketState::ESTABLISHED)
     {
         std::cout << "Not in LISTEN, SYN_SENT, or SYN_RECEIVED state, ignoring segment." << std::endl;
         return;
@@ -146,6 +146,18 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
             
             _state = SocketState::ESTABLISHED;
         }
+    }
+
+    if (segment.header.flags & TCPFlag::PSH)
+    {
+        std::cout << "Received PSH, enqueueing data." << std::endl;
+        ssize_t enq_bytes = _recv_buffer.enqueue(segment.header.seq_num, reinterpret_cast<const std::byte*>(segment.data.payload), segment.data.payload_len);
+        // Send ACK for received data
+        uint32_t ack_num = _recv_buffer.getAckNumber();
+        Frame ack_frame = createACKFrame(src_addr, ack_num);
+        ack_frame.build();
+        ack_frame.computeAndWriteChecksum();
+        _engine.send(this, ack_frame);
     }
 
 }
