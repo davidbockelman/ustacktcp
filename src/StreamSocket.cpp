@@ -39,7 +39,7 @@ Frame StreamSocket::createSYNACKFrame(const SocketAddr& dest_addr, uint32_t ack_
     tcphdr.checksum = 0;
     tcphdr.urgent_pointer = 0;
 
-    PseudoIPv4Header iphdr(_local_addr.ip.addr, _peer_addr.ip.addr, sizeof(TCPHeader));
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, htons(sizeof(TCPHeader)));
 
     TCPData payload(nullptr, 0);
 
@@ -52,7 +52,7 @@ Frame StreamSocket::createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num
     TCPHeader tcphdr{};
     tcphdr.src_port = htons(_local_addr.port);
     tcphdr.dst_port = htons(dest_addr.port);
-    tcphdr.seq_num = htonl(_iss);
+    tcphdr.seq_num = htonl(_iss+1); // FIXME: proper seq num
     tcphdr.ack_num = htonl(ack_num);
     tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
     tcphdr.flags = TCPFlag::ACK;
@@ -60,7 +60,7 @@ Frame StreamSocket::createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num
     tcphdr.checksum = 0;
     tcphdr.urgent_pointer = 0;
 
-    PseudoIPv4Header iphdr(_local_addr.ip.addr, _peer_addr.ip.addr, sizeof(TCPHeader));
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, htons(sizeof(TCPHeader)));
 
     TCPData payload(nullptr, 0);
 

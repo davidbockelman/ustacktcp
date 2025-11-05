@@ -85,6 +85,7 @@ ssize_t TCPData::write(unsigned char* buf) const
 
 void InternetChecksumBuilder::add(const void* buf, size_t len)
 {
+    _sum = 0;
     const uint16_t* words = static_cast<const uint16_t*>(buf);
     while (len > 1)
     {

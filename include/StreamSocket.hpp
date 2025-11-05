@@ -11,7 +11,7 @@ class StreamSocket {
     private:
         TCPEngine& _engine;
 
-        uint32_t _iss = 0; // FIXME: randomize
+        uint32_t _iss = 1910533701; // FIXME: randomize
 
         SocketAddr _local_addr;
         SocketAddr _peer_addr;

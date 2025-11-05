@@ -52,7 +52,7 @@ ssize_t TCPEngine::send(const StreamSocket* sock, const Frame& frame)
 }
 
 bool validTCPPort(uint16_t port) {
-    return port == 8000 || port == 8001;
+    return port >= 40000 && port <= 40010;
 }
 
 void TCPEngine::recv() {
@@ -88,14 +88,14 @@ void TCPEngine::recv() {
         SocketAddr dst_addr(IPAddr(ip_header.dst_addr), tcp_header.dst_port);
         SocketAddr src_addr(IPAddr(ip_header.src_addr), tcp_header.src_port);
 
-        // if (bound.find(dst_addr) == bound.end()) {
-        //     // No socket bound to this address
-        //     std::cout << "No socket bound to "
-        //               << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
-        //               << ":" << tcp_header.dst_port
-        //               << std::endl;
-        //     continue;
-        // }
+        if (bound.find(dst_addr) == bound.end()) {
+            // No socket bound to this address
+            // std::cout << "No socket bound to "
+            //           << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
+            //           << ":" << tcp_header.dst_port
+            //           << std::endl;
+            continue;
+        }
 
         std::cout << "Received packet from "
                     << inet_ntoa(*(in_addr*)&ip_header.src_addr)
@@ -103,11 +103,11 @@ void TCPEngine::recv() {
                     << " to "
                     << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
                     << ":" << tcp_header.dst_port
-                    << " of size " << data_size << " bytes."
+                    << " of size " << data_size << " bytes. "
+                    << "TCP seq num: " << tcp_header.seq_num
                     << std::endl;
-
-        // std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], std::ref(segment), std::ref(src_addr));
-        // worker.detach();
+        std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], segment, src_addr);
+        worker.detach();
 
         // Process the received TCP segment in 'buffer' of size 'data_size'
     }
