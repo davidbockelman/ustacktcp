@@ -52,7 +52,7 @@ Frame StreamSocket::createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num
     TCPHeader tcphdr{};
     tcphdr.src_port = htons(_local_addr.port);
     tcphdr.dst_port = htons(dest_addr.port);
-    tcphdr.seq_num = htonl(_iss+1); // FIXME: proper seq num
+    tcphdr.seq_num = htonl(_send_buffer.getSeqNumber()); // FIXME: proper seq num
     tcphdr.ack_num = htonl(ack_num);
     tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
     tcphdr.flags = TCPFlag::ACK;
@@ -81,6 +81,7 @@ bool StreamSocket::bind(const SocketAddr& addr)
 bool StreamSocket::connect(const SocketAddr& addr)
 {
     // Send SYN
+    _send_buffer.build(_iss); // FIXME: reset send buffer
     Frame syn_frame = createSYNFrame(addr);
     syn_frame.build();
     syn_frame.computeAndWriteChecksum();
@@ -113,8 +114,9 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
     {
         std::cout << "Received SYN, transitioning to SYN_RECEIVED." << std::endl;
         _state = SocketState::SYN_RECEIVED;
+        _recv_buffer.build(ntohl(segment.header.seq_num));
         // Send SYN-ACK
-        uint32_t ack_num = segment.header.seq_num + 1;
+        uint32_t ack_num =  _recv_buffer.getAckNumber();
         Frame synack_frame = createSYNACKFrame(src_addr, ack_num);
         synack_frame.build();
         synack_frame.computeAndWriteChecksum();
@@ -124,9 +126,11 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
     if (segment.header.flags == (TCPFlag::SYN | TCPFlag::ACK))
     {
         std::cout << "Received SYN-ACK, transitioning to ESTABLISHED." << std::endl;
+        _recv_buffer.build(segment.header.seq_num);
+        _send_buffer.ack(ntohl(segment.header.ack_num));
         _state = SocketState::ESTABLISHED;
         // Send ACK
-        uint32_t ack_num = segment.header.seq_num + 1;
+        uint32_t ack_num = _recv_buffer.getAckNumber();
         Frame ack_frame = createACKFrame(src_addr, ack_num);
         ack_frame.build();
         ack_frame.computeAndWriteChecksum();
@@ -135,9 +139,11 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
 
     if (segment.header.flags == TCPFlag::ACK)
     {
+        _send_buffer.ack(ntohl(segment.header.ack_num));
         if (_state == SocketState::SYN_RECEIVED)
         {
             std::cout << "Received ACK in SYN_RECEIVED, transitioning to ESTABLISHED." << std::endl;
+            
             _state = SocketState::ESTABLISHED;
         }
     }

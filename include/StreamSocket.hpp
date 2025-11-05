@@ -2,6 +2,8 @@
 
 #include <types.hpp>
 #include <TCPEngine.hpp>
+#include <SendBuffer.hpp>
+#include <RecvBuffer.hpp>
 
 namespace ustacktcp {
 
@@ -10,6 +12,9 @@ class TCPEngine;
 class StreamSocket {
     private:
         TCPEngine& _engine;
+
+        SendBuffer _send_buffer; // FIXME: randomize
+        RecvBuffer _recv_buffer;
 
         uint32_t _iss = 1910533701; // FIXME: randomize
 
