@@ -107,7 +107,6 @@ void TCPEngine::recv() {
                     << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
                     << ":" << tcp_header.dst_port
                     << " of size " << data_size << " bytes. "
-                    << "TCP seq num: " << tcp_header.seq_num
                     << std::endl;
         std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], segment, src_addr);
         worker.detach();

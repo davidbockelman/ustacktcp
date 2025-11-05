@@ -61,6 +61,8 @@ bool SocketAddr::operator==(const SocketAddr& other) const
     return (ip == other.ip) && (port == other.port);
 }
 
+PseudoIPv4Header::PseudoIPv4Header() {};
+
 PseudoIPv4Header::PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t tcp_len)
 :   src_addr(src), 
     dst_addr(dst), 
@@ -122,6 +124,8 @@ uint16_t InternetChecksumBuilder::finalize()
 {
     return (uint16_t)(~_sum);
 }
+
+Frame::Frame() {}
 
 Frame::Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload)
 :   _iphdr(iphdr), 

@@ -13,11 +13,11 @@ void SendBuffer::build(uint32_t iss)
     una_ = iss;
     nxt_ = iss + 1;
     wnd_ = 65535; // FIXME: initial window size
-    head_ = 0;
+    head_ = iss+1;
     buf_ = new std::byte[sz_]; // FIXME: hardcoded max size
 }
 
-ssize_t SendBuffer::enqueue(std::byte* data, size_t len)
+ssize_t SendBuffer::enqueue(const std::byte* data, size_t len)
 {
     auto bLen = (head_ + sz_ - una_) % sz_;
     auto free_sz = sz_ - bLen;
@@ -46,4 +46,13 @@ void SendBuffer::ack(uint32_t ack_num)
 }
 
 void SendBuffer::setWindowSize(uint16_t wnd) { wnd_ = wnd; }
+
+std::byte* SendBuffer::getData(size_t& len)
+{
+    // TODO: handle wrap-around
+    len = (head_ + sz_ - nxt_) % sz_;
+    auto start = buf_ + (nxt_ % sz_);
+    nxt_ += len;
+    return start;
+}
 

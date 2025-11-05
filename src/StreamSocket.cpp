@@ -68,6 +68,35 @@ Frame StreamSocket::createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num
     return frame;
 }
 
+Frame StreamSocket::createDataFrame(const SocketAddr& dest_addr)
+{
+    size_t payload_len = 0;
+    uint32_t seq_num = _send_buffer.getSeqNumber();
+    std::byte* data_ptr = _send_buffer.getData(payload_len);
+    if (payload_len == 0)
+    {
+        // No data to send
+        return Frame(); // FIXME: handle properly
+    }
+
+    TCPHeader tcphdr{};
+    tcphdr.src_port = _local_addr.port;
+    tcphdr.dst_port = dest_addr.port;
+    tcphdr.seq_num = seq_num;
+    tcphdr.ack_num = _recv_buffer.getAckNumber();
+    tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
+    tcphdr.flags = TCPFlag::PSH | TCPFlag::ACK;
+    tcphdr.window_size = _recv_buffer.getWindowSize(); // FIXME: proper window size
+    tcphdr.checksum = 0;
+    tcphdr.urgent_pointer = 0;
+
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, sizeof(TCPHeader) + payload_len);
+
+    TCPData payload(data_ptr, payload_len);
+
+    Frame frame(iphdr, tcphdr, payload);
+    return frame;
+}
 // FIXME: delete this constructor and use factory method
 StreamSocket::StreamSocket(TCPEngine& engine) : _engine(engine) {}
 
@@ -111,6 +140,7 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
     if (segment.header.flags == TCPFlag::SYN)
     {
         std::cout << "Received SYN, transitioning to SYN_RECEIVED." << std::endl;
+        _peer_addr = src_addr;
         _state = SocketState::SYN_RECEIVED;
         _recv_buffer.build(segment.header.seq_num);
         // Send SYN-ACK
@@ -122,6 +152,7 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
     if (segment.header.flags == (TCPFlag::SYN | TCPFlag::ACK))
     {
         std::cout << "Received SYN-ACK, transitioning to ESTABLISHED." << std::endl;
+        _peer_addr = src_addr;
         _recv_buffer.build(segment.header.seq_num);
         _send_buffer.ack(segment.header.ack_num);
         _state = SocketState::ESTABLISHED;
@@ -152,6 +183,21 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
         _engine.send(this, ack_frame);
     }
 
+}
+
+ssize_t StreamSocket::send(const std::byte* buf, size_t len)
+{
+    // Enqueue data into send buffer
+    ssize_t enq_bytes = _send_buffer.enqueue(buf, len);
+    if (enq_bytes < 0)
+    {
+        return -1; // FIXME: handle error
+    }
+    // Create data frame
+    Frame data_frame = createDataFrame(_peer_addr);
+    // Send data frame
+    ssize_t sent_bytes = _engine.send(this, data_frame);
+    return sent_bytes;
 }
 
 }

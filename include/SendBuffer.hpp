@@ -18,7 +18,9 @@ class SendBuffer {
 
         void build(uint32_t iss);
 
-        ssize_t enqueue(std::byte* data, size_t len);
+        ssize_t enqueue(const std::byte* data, size_t len);
+
+        std::byte* getData(size_t& len);
 
         uint32_t getSeqNumber() const;
 

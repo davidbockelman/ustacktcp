@@ -27,6 +27,8 @@ class StreamSocket {
 
         Frame createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
 
+        Frame createDataFrame(const SocketAddr& dest_addr);
+
     public:
         SocketState _state = SocketState::CLOSED;
         // FIXME: delete this constructor and use factory method
@@ -45,7 +47,7 @@ class StreamSocket {
 
         bool shutdown();
 
-        ssize_t send(const void* buf, size_t len);
+        ssize_t send(const std::byte* buf, size_t len);
 
         ssize_t recv(void* buf, size_t len);
 

@@ -72,6 +72,8 @@ struct PseudoIPv4Header {
     uint8_t protocol;
     uint16_t tcp_length;
 
+    PseudoIPv4Header();
+    
     PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t tcp_len);
 
     int writeNetworkBytes(std::byte* buf) const;
@@ -111,6 +113,8 @@ struct Frame {
         size_t _len;
 
     public:
+        Frame();
+    
         Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload);
 
         int writeNetworkBytes();
