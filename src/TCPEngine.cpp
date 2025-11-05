@@ -33,12 +33,15 @@ bool TCPEngine::bind(const SocketAddr& addr, StreamSocket* socket) {
     return true;
 }
 
-ssize_t TCPEngine::send(const StreamSocket* sock, const Frame& frame)
+ssize_t TCPEngine::send(const StreamSocket* sock, Frame& frame)
 {
     // TODO: check socket state
+    frame.writeNetworkBytes();
+    frame.computeAndWriteChecksum();
+
     sockaddr_in dst{};
     dst.sin_family = AF_INET;
-    dst.sin_addr.s_addr = frame.getDestinationIP();
+    dst.sin_addr.s_addr = htonl(frame.getDestinationIP());
     if (sendto(_raw_fd,
                 frame.getTCPSegmentBuffer(), frame.getTCPSegmentLength(),
                 0,
@@ -56,7 +59,7 @@ bool validTCPPort(uint16_t port) {
 }
 
 void TCPEngine::recv() {
-    unsigned char buffer[65536];
+    std::byte buffer[65536];
     ssize_t data_size;
     while (data_size = recvfrom(_raw_fd, buffer, sizeof(buffer), 0, nullptr, nullptr))
     {
@@ -79,7 +82,7 @@ void TCPEngine::recv() {
             continue;
         }
         size_t payload_len = data_size - ip_header.getHeaderLength() - sizeof(TCPHeader);
-        const unsigned char* payload = new unsigned char[payload_len];
+        const std::byte* payload = new std::byte[payload_len];
         memcpy((void*)payload, buffer + ip_header.getHeaderLength() + sizeof(TCPHeader), payload_len);
         TCPData tcp_data(payload, payload_len);
     

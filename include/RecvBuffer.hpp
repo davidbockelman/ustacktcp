@@ -23,4 +23,6 @@ class RecvBuffer {
         uint32_t getAckNumber() const;
 
         uint16_t availableDataSize() const;
+
+        uint16_t getWindowSize() const;
 };

@@ -22,8 +22,8 @@ int main() {
     std::thread reciever(&TCPEngine::recv, &engine);
     StreamSocket socket(engine);
     // StreamSocket socket2(engine);
-    SocketAddr local_addr(IPAddr(inet_addr("127.0.0.1")), 40000);
-    SocketAddr peer_addr(IPAddr(inet_addr("127.0.0.1")), 40011);
+    SocketAddr local_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40000);
+    SocketAddr peer_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40011);
     socket.bind(local_addr);
     // socket2.bind(peer_addr);
     // socket2.listen();

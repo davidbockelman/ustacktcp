@@ -8,17 +8,17 @@ namespace ustacktcp {
 Frame StreamSocket::createSYNFrame(const SocketAddr& dest_addr)
 {
     TCPHeader tcphdr{};
-    tcphdr.src_port = htons(_local_addr.port);
-    tcphdr.dst_port = htons(dest_addr.port);
-    tcphdr.seq_num = htonl(_iss);
+    tcphdr.src_port = _local_addr.port;
+    tcphdr.dst_port = dest_addr.port;
+    tcphdr.seq_num = _iss;
     tcphdr.ack_num = 0;
     tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
     tcphdr.flags = TCPFlag::SYN;
-    tcphdr.window_size = htons(65535); // FIXME: proper window size
+    tcphdr.window_size = 65535; // FIXME: proper window size
     tcphdr.checksum = 0;
     tcphdr.urgent_pointer = 0;
 
-    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, htons(sizeof(TCPHeader)));
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, sizeof(TCPHeader));
 
     TCPData payload(nullptr, 0);
 
@@ -29,17 +29,17 @@ Frame StreamSocket::createSYNFrame(const SocketAddr& dest_addr)
 Frame StreamSocket::createSYNACKFrame(const SocketAddr& dest_addr, uint32_t ack_num)
 {
     TCPHeader tcphdr{};
-    tcphdr.src_port = htons(_local_addr.port);
-    tcphdr.dst_port = htons(dest_addr.port);
-    tcphdr.seq_num = htonl(_iss);
-    tcphdr.ack_num = htonl(ack_num);
+    tcphdr.src_port = _local_addr.port;
+    tcphdr.dst_port = dest_addr.port;
+    tcphdr.seq_num = _iss;
+    tcphdr.ack_num = ack_num;
     tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
     tcphdr.flags = TCPFlag::SYN | TCPFlag::ACK;
-    tcphdr.window_size = htons(65535); // FIXME: proper window size
+    tcphdr.window_size = _recv_buffer.getWindowSize(); // FIXME: proper window size
     tcphdr.checksum = 0;
     tcphdr.urgent_pointer = 0;
 
-    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, htons(sizeof(TCPHeader)));
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, sizeof(TCPHeader));
 
     TCPData payload(nullptr, 0);
 
@@ -50,17 +50,17 @@ Frame StreamSocket::createSYNACKFrame(const SocketAddr& dest_addr, uint32_t ack_
 Frame StreamSocket::createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num)
 {
     TCPHeader tcphdr{};
-    tcphdr.src_port = htons(_local_addr.port);
-    tcphdr.dst_port = htons(dest_addr.port);
-    tcphdr.seq_num = htonl(_send_buffer.getSeqNumber()); // FIXME: proper seq num
-    tcphdr.ack_num = htonl(ack_num);
+    tcphdr.src_port = _local_addr.port;
+    tcphdr.dst_port = dest_addr.port;
+    tcphdr.seq_num = _send_buffer.getSeqNumber(); // FIXME: proper seq num
+    tcphdr.ack_num = ack_num;
     tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
     tcphdr.flags = TCPFlag::ACK;
-    tcphdr.window_size = htons(65535); // FIXME: proper window size
+    tcphdr.window_size = _recv_buffer.getWindowSize(); // FIXME: proper window size
     tcphdr.checksum = 0;
     tcphdr.urgent_pointer = 0;
 
-    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, htons(sizeof(TCPHeader)));
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, sizeof(TCPHeader));
 
     TCPData payload(nullptr, 0);
 
@@ -83,8 +83,6 @@ bool StreamSocket::connect(const SocketAddr& addr)
     // Send SYN
     _send_buffer.build(_iss); // FIXME: reset send buffer
     Frame syn_frame = createSYNFrame(addr);
-    syn_frame.build();
-    syn_frame.computeAndWriteChecksum();
     ssize_t sent_bytes = _engine.send(this, syn_frame);
     _state = SocketState::SYN_SENT;
 
@@ -114,12 +112,10 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
     {
         std::cout << "Received SYN, transitioning to SYN_RECEIVED." << std::endl;
         _state = SocketState::SYN_RECEIVED;
-        _recv_buffer.build(ntohl(segment.header.seq_num));
+        _recv_buffer.build(segment.header.seq_num);
         // Send SYN-ACK
         uint32_t ack_num =  _recv_buffer.getAckNumber();
         Frame synack_frame = createSYNACKFrame(src_addr, ack_num);
-        synack_frame.build();
-        synack_frame.computeAndWriteChecksum();
         _engine.send(this, synack_frame);
     }
 
@@ -127,19 +123,17 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
     {
         std::cout << "Received SYN-ACK, transitioning to ESTABLISHED." << std::endl;
         _recv_buffer.build(segment.header.seq_num);
-        _send_buffer.ack(ntohl(segment.header.ack_num));
+        _send_buffer.ack(segment.header.ack_num);
         _state = SocketState::ESTABLISHED;
         // Send ACK
         uint32_t ack_num = _recv_buffer.getAckNumber();
         Frame ack_frame = createACKFrame(src_addr, ack_num);
-        ack_frame.build();
-        ack_frame.computeAndWriteChecksum();
         _engine.send(this, ack_frame);
     }
 
     if (segment.header.flags == TCPFlag::ACK)
     {
-        _send_buffer.ack(ntohl(segment.header.ack_num));
+        _send_buffer.ack(segment.header.ack_num);
         if (_state == SocketState::SYN_RECEIVED)
         {
             std::cout << "Received ACK in SYN_RECEIVED, transitioning to ESTABLISHED." << std::endl;
@@ -155,8 +149,6 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
         // Send ACK for received data
         uint32_t ack_num = _recv_buffer.getAckNumber();
         Frame ack_frame = createACKFrame(src_addr, ack_num);
-        ack_frame.build();
-        ack_frame.computeAndWriteChecksum();
         _engine.send(this, ack_frame);
     }
 

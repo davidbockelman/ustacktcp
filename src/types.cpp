@@ -5,31 +5,39 @@
 
 namespace ustacktcp {
 
-TCPHeader::TCPHeader(const unsigned char* buf)
+TCPHeader::TCPHeader(const std::byte* buf)
 {
     src_port = ntohs(*reinterpret_cast<const uint16_t*>(buf));
     dst_port = ntohs(*reinterpret_cast<const uint16_t*>(buf + 2));
     seq_num = ntohl(*reinterpret_cast<const uint32_t*>(buf + 4));
     ack_num = ntohl(*reinterpret_cast<const uint32_t*>(buf + 8));
-    data_offset = buf[12];
-    flags = buf[13];
+    data_offset = std::to_integer<uint8_t>(buf[12]);
+    flags = std::to_integer<uint8_t>(buf[13]);
     window_size = ntohs(*reinterpret_cast<const uint16_t*>(buf + 14));
     checksum = ntohs(*reinterpret_cast<const uint16_t*>(buf + 16));
     urgent_pointer = ntohs(*reinterpret_cast<const uint16_t*>(buf + 18));
 }
 
-ssize_t TCPHeader::write(unsigned char* buf) const
+int TCPHeader::writeNetworkBytes(std::byte* buf) const
 {
-    memcpy(buf, &src_port, sizeof(src_port));
-    memcpy(buf + 2, &dst_port, sizeof(dst_port));
-    memcpy(buf + 4, &seq_num, sizeof(seq_num));
-    memcpy(buf + 8, &ack_num, sizeof(ack_num));
+    uint16_t src_port_n = htons(src_port);
+    uint16_t dst_port_n = htons(dst_port);
+    uint32_t seq_num_n = htonl(seq_num);
+    uint32_t ack_num_n = htonl(ack_num);
+    uint16_t window_size_n = htons(window_size);
+    uint16_t checksum_n = htons(checksum);
+    uint16_t urgent_pointer_n = htons(urgent_pointer);
+
+    memcpy(buf, &src_port_n, sizeof(src_port_n));
+    memcpy(buf + 2, &dst_port_n, sizeof(dst_port_n));
+    memcpy(buf + 4, &seq_num_n, sizeof(seq_num_n));
+    memcpy(buf + 8, &ack_num_n, sizeof(ack_num_n));
     memcpy(buf + 12, &data_offset, sizeof(data_offset));
     memcpy(buf + 13, &flags, sizeof(flags));
-    memcpy(buf + 14, &window_size, sizeof(window_size));
-    memcpy(buf + 16, &checksum, sizeof(checksum));
-    memcpy(buf + 18, &urgent_pointer, sizeof(urgent_pointer));
-    return 20; // size of TCP header without options
+    memcpy(buf + 14, &window_size_n, sizeof(window_size_n));
+    memcpy(buf + 16, &checksum_n, sizeof(checksum_n));
+    memcpy(buf + 18, &urgent_pointer_n, sizeof(urgent_pointer_n));
+    return 0;
 }
 
 size_t TCPHeader::getCheckSumOffset()
@@ -61,35 +69,39 @@ PseudoIPv4Header::PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t tcp_len)
     tcp_length(tcp_len) {}
 
 
-ssize_t PseudoIPv4Header::write(unsigned char* buf) const
+int PseudoIPv4Header::writeNetworkBytes(std::byte* buf) const
 {
-    memcpy(buf, &src_addr, sizeof(src_addr));
-    memcpy(buf + 4, &dst_addr, sizeof(dst_addr));
+    uint32_t src_addr_n = htonl(src_addr);
+    uint32_t dst_addr_n = htonl(dst_addr);
+    uint16_t tcp_length_n = htons(tcp_length);
+
+    memcpy(buf, &src_addr_n, sizeof(src_addr_n));
+    memcpy(buf + 4, &dst_addr_n, sizeof(dst_addr_n));
     memcpy(buf + 8, &zero, sizeof(zero));
     memcpy(buf + 9, &protocol, sizeof(protocol));
-    memcpy(buf + 10, &tcp_length, sizeof(tcp_length));
-    return 12;
+    memcpy(buf + 10, &tcp_length_n, sizeof(tcp_length_n));
+    return 0;
 }
 
 
 
-TCPData::TCPData(const unsigned char* p, size_t len)
+TCPData::TCPData(const std::byte* p, size_t len)
 :   payload(p), 
     payload_len(len) {}
 
-ssize_t TCPData::write(unsigned char* buf) const
+int TCPData::writeNetworkBytes(std::byte* buf) const
 {
     memcpy(buf, payload, payload_len);
-    return payload_len;
+    return 0;
 }
 
 void InternetChecksumBuilder::add(const void* buf, size_t len)
 {
     _sum = 0;
-    const uint16_t* words = static_cast<const uint16_t*>(buf);
+    const uint16_t* words = reinterpret_cast<const uint16_t*>(buf);
     while (len > 1)
     {
-        _sum += *words++;
+        _sum += htons(*words++);
         if (_sum & 0xFFFF0000)
         {
             _sum = (_sum & 0xFFFF) + (_sum >> 16);
@@ -120,19 +132,19 @@ Frame::Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload)
     _len(0)
     {}
 
-ssize_t Frame::build()
+int Frame::writeNetworkBytes()
 {
     _len = sizeof(PseudoIPv4Header) + sizeof(TCPHeader) + _payload.payload_len;
-    _buf = new unsigned char[_len];
+    _buf = new std::byte[_len];
     if (!_buf) return -1; // FIXME: handle error
 
     size_t offset = 0;
-    if (_iphdr.write(_buf) < 0) return -1; // FIXME: handle error
+    if (_iphdr.writeNetworkBytes(_buf) < 0) return -1;
     offset += sizeof(PseudoIPv4Header);
-    if (_tcphdr.write(_buf + offset) < 0) return -1; // FIXME: handle error
+    if (_tcphdr.writeNetworkBytes(_buf + offset) < 0) return -1;
     offset += sizeof(TCPHeader);
-    if (_payload.write(_buf + offset) < 0) return -1; // FIXME: handle error
-    return _len;
+    if (_payload.writeNetworkBytes(_buf + offset) < 0) return -1;
+    return 0;
 }
 
 int Frame::computeAndWriteChecksum()
@@ -140,7 +152,7 @@ int Frame::computeAndWriteChecksum()
     // TODO: handle error
     InternetChecksumBuilder checksum_builder;
     checksum_builder.add(_buf, _len);
-    uint16_t checksum = checksum_builder.finalize();
+    uint16_t checksum = htons(checksum_builder.finalize());
     // Write checksum back to TCP header
     memcpy(_buf + sizeof(PseudoIPv4Header) + TCPHeader::getCheckSumOffset(), &checksum, sizeof(checksum));
     return 0;
@@ -151,7 +163,7 @@ size_t Frame::getTCPSegmentLength() const
     return sizeof(TCPHeader) + _payload.payload_len; 
 }
 
-const unsigned char* Frame::getTCPSegmentBuffer() const
+const std::byte* Frame::getTCPSegmentBuffer() const
 { 
     return _buf + sizeof(PseudoIPv4Header); 
 }
@@ -161,18 +173,18 @@ const uint32_t Frame::getDestinationIP() const
     return _iphdr.dst_addr; 
 }
 
-IPHeader::IPHeader(const unsigned char* buf)
+IPHeader::IPHeader(const std::byte* buf)
 {
-    version_ihl = buf[0];
-    tos = buf[1];
+    version_ihl = std::to_integer<uint8_t>(buf[0]);
+    tos = std::to_integer<uint8_t>(buf[1]);
     total_length = ntohs(*reinterpret_cast<const uint16_t*>(buf + 2));
     identification = ntohs(*reinterpret_cast<const uint16_t*>(buf + 4));
     flags_fragment_offset = ntohs(*reinterpret_cast<const uint16_t*>(buf + 6));
-    ttl = buf[8];
-    protocol = buf[9];
+    ttl = std::to_integer<uint8_t>(buf[8]);
+    protocol = std::to_integer<uint8_t>(buf[9]);
     header_checksum = ntohs(*reinterpret_cast<const uint16_t*>(buf + 10));
-    src_addr = *reinterpret_cast<const uint32_t*>(buf + 12);
-    dst_addr = *reinterpret_cast<const uint32_t*>(buf + 16);
+    src_addr = ntohl(*reinterpret_cast<const uint32_t*>(buf + 12));
+    dst_addr = ntohl(*reinterpret_cast<const uint32_t*>(buf + 16));
 }
 
 bool IPHeader::nextProtoIsTCP() const

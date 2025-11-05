@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <unistd.h>
+#include <cstddef>
 
 namespace ustacktcp {
 
@@ -34,11 +35,11 @@ struct TCPHeader {
 
     TCPHeader() = default;
 
-    TCPHeader(const unsigned char* buf);
+    TCPHeader(const std::byte* buf);
     
-    ssize_t write(unsigned char* buf) const;
-
     static size_t getCheckSumOffset();
+
+    int writeNetworkBytes(std::byte* buf) const;
 };
 
 struct IPAddr {
@@ -73,20 +74,20 @@ struct PseudoIPv4Header {
 
     PseudoIPv4Header(uint32_t src, uint32_t dst, uint16_t tcp_len);
 
-    ssize_t write(unsigned char* buf) const;
+    int writeNetworkBytes(std::byte* buf) const;
 };
 
 struct TCPData {
-    const unsigned char* payload;
+    const std::byte* payload;
     size_t payload_len;
 
     TCPData() = default;
     
     TCPData(const TCPData& other) = default;
     
-    TCPData(const unsigned char* p, size_t len);
+    TCPData(const std::byte* p, size_t len);
 
-    ssize_t write(unsigned char* buf) const;
+    int writeNetworkBytes(std::byte* buf) const;
 };
 
 struct InternetChecksumBuilder {
@@ -105,20 +106,20 @@ struct Frame {
         TCPHeader _tcphdr;
         TCPData _payload;
     
-        unsigned char* _buf;
+        std::byte* _buf;
         size_t _cap;
         size_t _len;
 
     public:
         Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload);
 
-        ssize_t build();
+        int writeNetworkBytes();
 
         int computeAndWriteChecksum();
 
         size_t getTCPSegmentLength() const;
 
-        const unsigned char* getTCPSegmentBuffer() const;
+        const std::byte* getTCPSegmentBuffer() const;
 
         const uint32_t getDestinationIP() const;
 
@@ -139,7 +140,7 @@ struct IPHeader {
 
     IPHeader() = default;
 
-    IPHeader(const unsigned char* buf);
+    IPHeader(const std::byte* buf);
 
     bool nextProtoIsTCP() const;
 

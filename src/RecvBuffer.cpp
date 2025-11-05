@@ -59,3 +59,9 @@ uint16_t RecvBuffer::availableDataSize() const
 {
     return (nxt_ + sz_ - tail_) % sz_;
 }
+
+uint16_t RecvBuffer::getWindowSize() const
+{
+    auto bLen = (nxt_ + sz_ - tail_) % sz_;
+    return static_cast<uint16_t>(sz_ - bLen);
+}
