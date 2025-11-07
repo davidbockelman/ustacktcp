@@ -4,6 +4,8 @@
 #include <TCPEngine.hpp>
 #include <SendBuffer.hpp>
 #include <RecvBuffer.hpp>
+#include <mutex>
+#include <condition_variable>
 
 namespace ustacktcp {
 
@@ -20,6 +22,9 @@ class StreamSocket {
 
         SocketAddr _local_addr;
         SocketAddr _peer_addr;
+
+        std::mutex m_;
+        std::condition_variable cv_;
 
         Frame createSYNFrame(const SocketAddr& dest_addr);
 
@@ -49,7 +54,7 @@ class StreamSocket {
 
         ssize_t send(const std::byte* buf, size_t len);
 
-        ssize_t recv(void* buf, size_t len);
+        ssize_t recv(std::byte* buf, size_t len);
 
         void handleSegment(const TCPSegment& segment, const SocketAddr& src_addr);
 };

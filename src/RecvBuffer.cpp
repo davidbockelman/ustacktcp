@@ -34,10 +34,10 @@ ssize_t RecvBuffer::enqueue(uint32_t seq_num, const std::byte* data, size_t len)
     return len;
 }
 
-void RecvBuffer::push(std::byte* dest, size_t& len)
+ssize_t RecvBuffer::dequeue(std::byte* dest, size_t len)
 {
     auto avail_sz = availableDataSize();
-    auto to_copy = static_cast<size_t>(avail_sz);
+    auto to_copy = std::min(static_cast<size_t>(avail_sz),len);
     auto firstBlockSz = std::min(sz_-(tail_%sz_),to_copy);
     auto firstBlockStart = buf_+(tail_%sz_);
     memcpy(dest, firstBlockStart, firstBlockSz);
@@ -47,7 +47,7 @@ void RecvBuffer::push(std::byte* dest, size_t& len)
         memcpy(dest+firstBlockSz,buf_,secondBlockSz);
     }
     tail_ += to_copy;
-    len = to_copy;
+    return to_copy;
 }
 
 uint32_t RecvBuffer::getAckNumber() const
@@ -57,6 +57,7 @@ uint32_t RecvBuffer::getAckNumber() const
 
 uint16_t RecvBuffer::availableDataSize() const
 {
+    if (nxt_ == irs_+1) return 0;
     return (nxt_ + sz_ - tail_) % sz_;
 }
 

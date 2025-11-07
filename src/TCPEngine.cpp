@@ -100,14 +100,14 @@ void TCPEngine::recv() {
             continue;
         }
 
-        std::cout << "Received packet from "
-                    << inet_ntoa(*(in_addr*)&ip_header.src_addr)
-                    << ":" << tcp_header.src_port
-                    << " to "
-                    << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
-                    << ":" << tcp_header.dst_port
-                    << " of size " << data_size << " bytes. "
-                    << std::endl;
+        // std::cout << "Received packet from "
+        //             << inet_ntoa(*(in_addr*)&ip_header.src_addr)
+        //             << ":" << tcp_header.src_port
+        //             << " to "
+        //             << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
+        //             << ":" << tcp_header.dst_port
+        //             << " of size " << data_size << " bytes. "
+        //             << std::endl;
         std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], segment, src_addr);
         worker.detach();
 
