@@ -33,7 +33,7 @@ bool TCPEngine::bind(const SocketAddr& addr, StreamSocket* socket) {
     return true;
 }
 
-ssize_t TCPEngine::send(const StreamSocket* sock, Frame& frame)
+ssize_t TCPEngine::send(StreamSocket* sock, Frame& frame)
 {
     // TODO: check socket state
     frame.writeNetworkBytes();

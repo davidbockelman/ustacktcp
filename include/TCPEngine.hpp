@@ -27,7 +27,7 @@ class TCPEngine {
 
         bool bind(const SocketAddr& addr, StreamSocket* socket);
 
-        ssize_t send(const StreamSocket* sock, Frame& frame);
+        ssize_t send(StreamSocket* sock, Frame& frame);
 
         void recv();
 };

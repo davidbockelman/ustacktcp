@@ -97,8 +97,30 @@ Frame StreamSocket::createDataFrame(const SocketAddr& dest_addr)
     Frame frame(iphdr, tcphdr, payload);
     return frame;
 }
+
+Frame StreamSocket::createFINACKFrame(const SocketAddr& dest_addr)
+{
+    TCPHeader tcphdr{};
+    tcphdr.src_port = _local_addr.port;
+    tcphdr.dst_port = dest_addr.port;
+    tcphdr.seq_num = _send_buffer.getSeqNumber(); // FIXME: proper seq num
+    tcphdr.ack_num = _recv_buffer.getAckNumber();
+    tcphdr.data_offset = (sizeof(TCPHeader) / 4) << 4;
+    tcphdr.flags = TCPFlag::FIN | TCPFlag::ACK;
+    tcphdr.window_size = _recv_buffer.getWindowSize(); // FIXME: proper window size
+    tcphdr.checksum = 0;
+    tcphdr.urgent_pointer = 0;
+
+    PseudoIPv4Header iphdr(_local_addr.ip.addr, dest_addr.ip.addr, sizeof(TCPHeader));
+
+    TCPData payload(nullptr, 0);
+
+    Frame frame(iphdr, tcphdr, payload);
+    return frame;
+}
+
 // FIXME: delete this constructor and use factory method
-StreamSocket::StreamSocket(TCPEngine& engine) : _engine(engine) {}
+StreamSocket::StreamSocket(TCPEngine& engine) : _engine(engine), rtt_(std::chrono::milliseconds(1000)) {}
 
 
 bool StreamSocket::bind(const SocketAddr& addr)
@@ -202,6 +224,12 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
         // Send ACK for received data
         Frame ack_frame = createACKFrame(src_addr, ack_num);
         _engine.send(this, ack_frame);
+    }
+
+    if (segment.header.flags & TCPFlag::FIN)
+    {
+        Frame finack_frame = createFINACKFrame(src_addr);
+        _engine.send(this, finack_frame);
     }
 
 }

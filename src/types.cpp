@@ -177,6 +177,16 @@ const uint32_t Frame::getDestinationIP() const
     return _iphdr.dst_addr; 
 }
 
+const uint32_t Frame::getStartSeqNum() const
+{
+    return _tcphdr.seq_num;
+}
+
+const uint32_t Frame::getEndSeqNum() const
+{
+    return _tcphdr.seq_num + _payload.payload_len + 1;
+}
+
 IPHeader::IPHeader(const std::byte* buf)
 {
     version_ihl = std::to_integer<uint8_t>(buf[0]);

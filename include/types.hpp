@@ -4,6 +4,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <cstddef>
+#include <chrono>
 
 namespace ustacktcp {
 
@@ -126,6 +127,10 @@ struct Frame {
         const std::byte* getTCPSegmentBuffer() const;
 
         const uint32_t getDestinationIP() const;
+
+        const uint32_t getStartSeqNum() const;
+
+        const uint32_t getEndSeqNum() const;
 
 };
 

@@ -6,6 +6,8 @@
 #include <RecvBuffer.hpp>
 #include <mutex>
 #include <condition_variable>
+#include <map>
+#include <chrono>
 
 namespace ustacktcp {
 
@@ -26,6 +28,9 @@ class StreamSocket {
         std::mutex m_;
         std::condition_variable cv_;
 
+        std::chrono::steady_clock::time_point to_expiry_;
+        std::chrono::steady_clock::duration rtt_;
+
         Frame createSYNFrame(const SocketAddr& dest_addr);
 
         Frame createSYNACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
@@ -33,6 +38,8 @@ class StreamSocket {
         Frame createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
 
         Frame createDataFrame(const SocketAddr& dest_addr);
+
+        Frame createFINACKFrame(const SocketAddr& dest_addr);
 
     public:
         SocketState _state = SocketState::CLOSED;
