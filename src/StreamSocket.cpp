@@ -126,7 +126,7 @@ StreamSocket::StreamSocket(TCPEngine& engine) : _engine(engine), rtt_(std::chron
 bool StreamSocket::bind(const SocketAddr& addr)
 {
     _local_addr = addr;
-    return _engine.bind(addr, this);
+    return _engine.bind(addr, shared_from_this());
 }
 
 bool StreamSocket::connect(const SocketAddr& addr)
@@ -134,7 +134,7 @@ bool StreamSocket::connect(const SocketAddr& addr)
     // Send SYN
     _send_buffer.build(_iss); // FIXME: reset send buffer
     Frame syn_frame = createSYNFrame(addr);
-    ssize_t sent_bytes = _engine.send(this, syn_frame);
+    ssize_t sent_bytes = _engine.send(syn_frame);
     _state = SocketState::SYN_SENT;
 
     // Wait for SYN or SYN-ACK
@@ -174,7 +174,7 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
         // Send SYN-ACK
         uint32_t ack_num =  _recv_buffer.getAckNumber();
         Frame synack_frame = createSYNACKFrame(src_addr, ack_num);
-        _engine.send(this, synack_frame);
+        _engine.send(synack_frame);
     }
 
     if (segment.header.flags == (TCPFlag::SYN | TCPFlag::ACK))
@@ -191,7 +191,7 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
         // Send ACK
         uint32_t ack_num = _recv_buffer.getAckNumber();
         Frame ack_frame = createACKFrame(src_addr, ack_num);
-        _engine.send(this, ack_frame);
+        _engine.send(ack_frame);
     }
 
     if (segment.header.flags == TCPFlag::ACK)
@@ -223,13 +223,13 @@ void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& sr
         } 
         // Send ACK for received data
         Frame ack_frame = createACKFrame(src_addr, ack_num);
-        _engine.send(this, ack_frame);
+        _engine.send(ack_frame);
     }
 
     if (segment.header.flags & TCPFlag::FIN)
     {
         Frame finack_frame = createFINACKFrame(src_addr);
-        _engine.send(this, finack_frame);
+        _engine.send(finack_frame);
     }
 
 }
@@ -245,7 +245,7 @@ ssize_t StreamSocket::send(const std::byte* buf, size_t len)
     // Create data frame
     Frame data_frame = createDataFrame(_peer_addr);
     // Send data frame
-    ssize_t sent_bytes = _engine.send(this, data_frame);
+    ssize_t sent_bytes = _engine.send(data_frame);
     return sent_bytes;
 }
 

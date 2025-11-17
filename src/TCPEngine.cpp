@@ -15,6 +15,13 @@
 
 namespace ustacktcp {
 
+std::shared_ptr<StreamSocket> make_socket(TCPEngine& engine)
+{
+    const auto ptr = std::make_shared<StreamSocket>(engine);
+    engine.sockets_.push_back(ptr);
+    return ptr;
+}
+    
 TCPEngine::TCPEngine() 
 {
     _raw_fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -25,7 +32,7 @@ TCPEngine::TCPEngine()
     }
 }
 
-bool TCPEngine::bind(const SocketAddr& addr, StreamSocket* socket) {
+bool TCPEngine::bind(const SocketAddr& addr, std::shared_ptr<StreamSocket> socket) {
     if (bound.find(addr) != bound.end()) {
         return false;
     }
@@ -33,7 +40,7 @@ bool TCPEngine::bind(const SocketAddr& addr, StreamSocket* socket) {
     return true;
 }
 
-ssize_t TCPEngine::send(StreamSocket* sock, Frame& frame)
+ssize_t TCPEngine::send(Frame& frame)
 {
     // TODO: check socket state
     frame.writeNetworkBytes();

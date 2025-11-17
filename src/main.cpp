@@ -17,49 +17,46 @@
 
 using namespace ustacktcp;
 
-void recvLoop(StreamSocket& s)
-{
-    std::byte buf[65535];
-    ssize_t data_sz;
-    while (data_sz = s.recv(buf, 65535))
-    {
-        buf[data_sz-1] = std::byte {};
-        const char* in = reinterpret_cast<const char*>(buf);
-        std::cout << std::string(in, data_sz) << std::endl;
-    }
-}
+// void recvLoop(StreamSocket& s)
+// {
+//     std::byte buf[65535];
+//     ssize_t data_sz;
+//     while (data_sz = s.recv(buf, 65535))
+//     {
+//         buf[data_sz-1] = std::byte {};
+//         const char* in = reinterpret_cast<const char*>(buf);
+//         std::cout << std::string(in, data_sz) << std::endl;
+//     }
+// }
 
-void sendLoop(StreamSocket& s)
-{
-    std::string line;
-    while (std::getline(std::cin, line))
-    {
-        line.append(1, '\n');
-        const char* data = line.data();
-        size_t len = line.size();
-        std::byte* buf = const_cast<std::byte*>(reinterpret_cast<const std::byte*>(data));
-        s.send(buf, len);
-    }
-}
+// void sendLoop(StreamSocket& s)
+// {
+//     std::string line;
+//     while (std::getline(std::cin, line))
+//     {
+//         line.append(1, '\n');
+//         const char* data = line.data();
+//         size_t len = line.size();
+//         std::byte* buf = const_cast<std::byte*>(reinterpret_cast<const std::byte*>(data));
+//         s.send(buf, len);
+//     }
+// }
 
 int main() {
 
     TCPEngine engine;
     std::thread reciever(&TCPEngine::recv, &engine);
     reciever.detach();
-    StreamSocket socket(engine);
-    // StreamSocket socket2(engine);
+    auto socket = make_socket(engine);
     SocketAddr local_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40000);
     SocketAddr peer_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40012);
-    socket.bind(local_addr);
-    // socket2.bind(peer_addr);
-    // socket2.listen();
-    socket.connect(peer_addr);
+    socket->bind(local_addr);
+    socket->connect(peer_addr);
 
-    std::thread recvThr(recvLoop, std::ref(socket));
-    recvThr.detach();
+    // std::thread recvThr(recvLoop, std::ref(socket));
+    // recvThr.detach();
     
-    sendLoop(socket);
+    // sendLoop(socket);
 
     return 0;
 }

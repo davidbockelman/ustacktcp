@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 
+namespace ustacktcp {
 
 SendBuffer::SendBuffer() {}
 
@@ -56,3 +57,4 @@ std::byte* SendBuffer::getData(size_t& len)
     return start;
 }
 
+}

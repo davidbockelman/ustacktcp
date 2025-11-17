@@ -13,7 +13,7 @@ namespace ustacktcp {
 
 class TCPEngine;
 
-class StreamSocket {
+class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
     private:
         TCPEngine& _engine;
 
@@ -41,11 +41,13 @@ class StreamSocket {
 
         Frame createFINACKFrame(const SocketAddr& dest_addr);
 
+        friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
     public:
+        StreamSocket(TCPEngine& engine);
         SocketState _state = SocketState::CLOSED;
         // FIXME: delete this constructor and use factory method
-        StreamSocket(TCPEngine& engine);
-
+        StreamSocket(const StreamSocket&) = delete;
+        StreamSocket& operator=(const StreamSocket&) = delete;
 
         bool bind(const SocketAddr& addr);
 
