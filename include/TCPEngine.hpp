@@ -36,7 +36,7 @@ class TCPEngine {
 
         bool bind(const SocketAddr& addr, std::shared_ptr<StreamSocket> socket);
 
-        ssize_t send(Frame& frame);
+        ssize_t send(std::shared_ptr<TCPSegment>& seg, const SocketAddr& src_addr, const SocketAddr& dest_addr, const RecvBuffer& recv_buf);
 
         void recv();
 };

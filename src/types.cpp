@@ -91,15 +91,31 @@ TCPData::TCPData(const std::byte* p, size_t len)
 :   payload(p), 
     payload_len(len) {}
 
+TCPData::TCPData(const std::shared_ptr<TCPSegment>& seg)
+{
+    if (seg->brk_len_ != seg->len_)
+    {
+        payload = new std::byte[seg->len_];
+        memcpy(const_cast<std::byte*>(payload), seg->data_, seg->brk_len_);
+        memcpy(const_cast<std::byte*>(payload) + seg->brk_len_, seg->data2_, seg->len_ - seg->brk_len_);
+    }
+    else
+    {
+        payload = seg->data_;
+    }
+    payload_len = seg->len_;
+}
+
 int TCPData::writeNetworkBytes(std::byte* buf) const
 {
     memcpy(buf, payload, payload_len);
     return 0;
 }
 
+InternetChecksumBuilder::InternetChecksumBuilder() : _sum(0) {}
+
 void InternetChecksumBuilder::add(const void* buf, size_t len)
 {
-    _sum = 0;
     const uint16_t* words = reinterpret_cast<const uint16_t*>(buf);
     while (len > 1)
     {
@@ -212,11 +228,5 @@ size_t IPHeader::getHeaderLength() const
 }
 
 // FIXME: copying
-TCPSegment::TCPSegment(TCPHeader h, TCPOptions o, TCPData d)
-{
-    header = h;
-    options = o;
-    data = d;
-}
 
 }

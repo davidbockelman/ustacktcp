@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <cstddef>
 #include <chrono>
+#include <memory>
 
 namespace ustacktcp {
 
@@ -87,6 +88,8 @@ struct TCPData {
     TCPData() = default;
     
     TCPData(const TCPData& other) = default;
+
+    TCPData(const std::shared_ptr<TCPSegment>&);
     
     TCPData(const std::byte* p, size_t len);
 
@@ -157,11 +160,32 @@ struct IPHeader {
 };
 
 struct TCPSegment {
-    TCPHeader header;
-    TCPOptions options;
-    TCPData data;
+    const std::byte* data_;
+    const std::byte* data2_;
+    uint32_t seq_start_;
+    uint32_t len_;
+    uint32_t brk_len_;
+    size_t retransmit_cnt_;
+    uint8_t flags_;
+    std::chrono::steady_clock::time_point send_tmstp_;
 
-    TCPSegment(TCPHeader h, TCPOptions o, TCPData d);
+    TCPSegment(const std::byte* data, const std::byte* data2, uint32_t seq_start, uint32_t len, uint32_t brk_len, uint8_t flags)
+    :   data_(data),
+        data2_(data2),
+        seq_start_(seq_start),
+        len_(len),
+        brk_len_(brk_len),
+        retransmit_cnt_(0),
+        flags_(flags),
+        send_tmstp_(std::chrono::steady_clock::now())
+    {}
+};
+
+struct TCPSegmentCompare {
+    bool operator()(const std::shared_ptr<TCPSegment>& a, const std::shared_ptr<TCPSegment>& b) const
+    {
+        return a->seq_start_ > b->seq_start_;
+    }
 };
 
 // FIXME: what size int is this?

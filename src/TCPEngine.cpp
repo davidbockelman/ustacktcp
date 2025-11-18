@@ -40,17 +40,40 @@ bool TCPEngine::bind(const SocketAddr& addr, std::shared_ptr<StreamSocket> socke
     return true;
 }
 
-ssize_t TCPEngine::send(Frame& frame)
+ssize_t TCPEngine::send(std::shared_ptr<TCPSegment>& seg, const SocketAddr& src_addr, const SocketAddr& dest_addr, const RecvBuffer& recv_buf)
 {
     // TODO: check socket state
-    frame.writeNetworkBytes();
-    frame.computeAndWriteChecksum();
+    auto nonconst = const_cast<std::byte*>(seg->data_);
+    TCPHeader* tcphdr = reinterpret_cast<TCPHeader*>(nonconst);
+    tcphdr->src_port = htons(src_addr.port);
+    tcphdr->dst_port = htons(dest_addr.port);
+    tcphdr->seq_num = htonl(seg->seq_start_);
+    tcphdr->ack_num = htonl(recv_buf.getAckNumber()); 
+    tcphdr->data_offset = (sizeof(TCPHeader) / 4) << 4;
+    tcphdr->flags = seg->flags_;
+    tcphdr->window_size = htons(recv_buf.getWindowSize()); 
+    tcphdr->checksum = 0;
+    tcphdr->urgent_pointer = 0;
+
+    PseudoIPv4Header iphdr;
+    iphdr.src_addr = htonl(src_addr.ip.addr);
+    iphdr.dst_addr = htonl(dest_addr.ip.addr);
+    iphdr.zero = 0;
+    iphdr.protocol = IPPROTO_TCP;
+    iphdr.tcp_length = htons(seg->len_);
+
+    InternetChecksumBuilder chksum;
+    chksum.add(&iphdr, sizeof(PseudoIPv4Header));
+    chksum.add(seg->data_, seg->len_);
+    tcphdr->checksum = htons(chksum.finalize());
 
     sockaddr_in dst{};
     dst.sin_family = AF_INET;
-    dst.sin_addr.s_addr = htonl(frame.getDestinationIP());
+    dst.sin_addr.s_addr = htonl(dest_addr.ip.addr);
+
+    seg->send_tmstp_ = std::chrono::steady_clock::now();
     if (sendto(_raw_fd,
-                frame.getTCPSegmentBuffer(), frame.getTCPSegmentLength(),
+                seg->data_, seg->len_,
                 0,
                 (sockaddr*)&dst, sizeof(dst))
         < 0)
@@ -58,7 +81,7 @@ ssize_t TCPEngine::send(Frame& frame)
             perror("TCPEngine::sendto");
             return -1;
         }
-    return frame.getTCPSegmentLength();
+    return seg->len_;
 }
 
 bool validTCPPort(uint16_t port) {

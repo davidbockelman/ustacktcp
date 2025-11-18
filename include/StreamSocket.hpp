@@ -17,8 +17,8 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
     private:
         TCPEngine& _engine;
 
-        SendBuffer _send_buffer; // FIXME: randomize
         RecvBuffer _recv_buffer;
+        SendBuffer _send_buffer; // FIXME: randomize
 
         uint32_t _iss = 1910533701; // FIXME: randomize
 
@@ -27,19 +27,6 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
 
         std::mutex m_;
         std::condition_variable cv_;
-
-        std::chrono::steady_clock::time_point to_expiry_;
-        std::chrono::steady_clock::duration rtt_;
-
-        Frame createSYNFrame(const SocketAddr& dest_addr);
-
-        Frame createSYNACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
-
-        Frame createACKFrame(const SocketAddr& dest_addr, uint32_t ack_num);
-
-        Frame createDataFrame(const SocketAddr& dest_addr);
-
-        Frame createFINACKFrame(const SocketAddr& dest_addr);
 
         friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
     public:
