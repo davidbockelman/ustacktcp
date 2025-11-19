@@ -1,18 +1,18 @@
+
 #pragma once
 
-#include <types.hpp>
-#include <TCPEngine.hpp>
-#include <SendBuffer.hpp>
-#include <RecvBuffer.hpp>
+
 #include <mutex>
 #include <condition_variable>
 #include <map>
 #include <chrono>
 
-namespace ustacktcp {
+#include <types.hpp>
+#include <SendBuffer.hpp>
+#include <RecvBuffer.hpp>
+#include <TCPEngine.hpp>
 
-class TCPEngine;
-class SendBuffer;
+namespace ustacktcp {
 
 class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
     private:
@@ -30,7 +30,7 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
         std::condition_variable cv_;
 
         friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
-        // friend void TCPEngine::recv();
+        friend void TCPEngine::recv();
     public:
         StreamSocket(TCPEngine& engine);
         SocketState _state = SocketState::CLOSED;

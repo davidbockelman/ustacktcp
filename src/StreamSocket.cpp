@@ -80,7 +80,7 @@ void StreamSocket::handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_ad
     {
         TCPHeader tmp;
         auto p = std::make_shared<TCPSegment>(
-            &tmp,
+            reinterpret_cast<const std::byte*>(&tmp),
             nullptr,
             _send_buffer.getSeqNumber(),
             sizeof(TCPHeader),

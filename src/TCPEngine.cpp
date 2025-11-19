@@ -5,13 +5,15 @@
 #include <cstring>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <netinet/ip.h>     // struct iphdr
+#include <netinet/ip.h> 
 #include <arpa/inet.h>
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 #include <net/if.h>
 
 #include <TCPEngine.hpp>
+#include <RecvBuffer.hpp>
+#include <StreamSocket.hpp>
 
 namespace ustacktcp {
 

@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <queue>
 #include <vector>
+#include <memory>
+
 #include <types.hpp>
 
 namespace ustacktcp {

@@ -45,6 +45,7 @@ ssize_t RecvBuffer::enqueue(const std::byte* data, const size_t len, const uint3
     );
 
     q_.push(p);
+    return len;
 }
 
 ssize_t RecvBuffer::dequeue(std::byte* dest, const size_t len)
