@@ -39,84 +39,6 @@ bool StreamSocket::listen()
     return true;
 }
 
-void StreamSocket::handleSegment(const TCPSegment& segment, const SocketAddr& src_addr)
-{
-    // Handle incoming segment based on current state
-    // Update state accordingly
-    if (_state != SocketState::LISTEN && _state != SocketState::SYN_SENT && _state != SocketState::SYN_RECEIVED && _state != SocketState::ESTABLISHED)
-    {
-        // std::cout << "Not in LISTEN, SYN_SENT, or SYN_RECEIVED state, ignoring segment." << std::endl;
-        return;
-    }
-
-    if (segment.header.flags == TCPFlag::SYN)
-    {
-        // std::cout << "Received SYN, transitioning to SYN_RECEIVED." << std::endl;
-        _peer_addr = src_addr;
-        _state = SocketState::SYN_RECEIVED;
-        _recv_buffer.build(segment.header.seq_num);
-        // Send SYN-ACK
-        uint32_t ack_num =  _recv_buffer.getAckNumber();
-        Frame synack_frame = createSYNACKFrame(src_addr, ack_num);
-        _engine.send(synack_frame);
-    }
-
-    if (segment.header.flags == (TCPFlag::SYN | TCPFlag::ACK))
-    {
-        // std::cout << "Received SYN-ACK, transitioning to ESTABLISHED." << std::endl;
-        _peer_addr = src_addr;
-        _recv_buffer.build(segment.header.seq_num);
-        _send_buffer.ack(segment.header.ack_num);
-        {
-            std::lock_guard<std::mutex> lock(m_);
-            _state = SocketState::ESTABLISHED;
-            cv_.notify_all();
-        }
-        // Send ACK
-        uint32_t ack_num = _recv_buffer.getAckNumber();
-        Frame ack_frame = createACKFrame(src_addr, ack_num);
-        _engine.send(ack_frame);
-    }
-
-    if (segment.header.flags == TCPFlag::ACK)
-    {
-        _send_buffer.ack(segment.header.ack_num);
-        if (_state == SocketState::SYN_RECEIVED)
-        {
-            // std::cout << "Received ACK in SYN_RECEIVED, transitioning to ESTABLISHED." << std::endl;
-            
-            {
-                std::lock_guard<std::mutex> lock(m_);
-                _state = SocketState::ESTABLISHED;
-                cv_.notify_all();
-            }
-        }
-    }
-
-    if (segment.header.flags & TCPFlag::PSH)
-    {
-        // std::cout << "Received PSH, enqueueing data." << std::endl;
-        ssize_t enq_bytes;
-        uint32_t ack_num;
-        {
-            std::lock_guard<std::mutex> lg(m_);
-            enq_bytes = _recv_buffer.enqueue(segment.header.seq_num, reinterpret_cast<const std::byte*>(segment.data.payload), segment.data.payload_len);
-            ack_num  = _recv_buffer.getAckNumber();
-            if (_recv_buffer.availableDataSize() > 0)
-                cv_.notify_all();
-        } 
-        // Send ACK for received data
-        Frame ack_frame = createACKFrame(src_addr, ack_num);
-        _engine.send(ack_frame);
-    }
-
-    if (segment.header.flags & TCPFlag::FIN)
-    {
-        Frame finack_frame = createFINACKFrame(src_addr);
-        _engine.send(finack_frame);
-    }
-
-}
 
 ssize_t StreamSocket::send(const std::byte* buf, size_t len)
 {
@@ -129,22 +51,61 @@ ssize_t StreamSocket::send(const std::byte* buf, size_t len)
     return enq_bytes;
 }
 
+void StreamSocket::handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_addr)
+{
+    if (tcphdr.flags == TCPFlag::SYN)
+    {
+        std::lock_guard lg(m_);
+        _peer_addr = src_addr;
+        _send_buffer.setPeerAddr(src_addr);
+        _recv_buffer.setIRS(tcphdr.seq_num);
+        // TODO: check state
+        _state = SocketState::SYN_RECEIVED;
+        _send_buffer.enqueue(nullptr, 0, TCPFlag::SYN & TCPFlag::ACK);
+        return;
+    }
+
+    if (tcphdr.flags & TCPFlag::ACK)
+    {
+        _send_buffer.handleACK(tcphdr.ack_num, std::chrono::steady_clock::now());
+        if (_state == SocketState::SYN_RECEIVED)
+        {
+            _state = SocketState::ESTABLISHED;
+            cv_.notify_all();
+        }
+    }
+
+    //TODO: make sure FIN works
+    if (tcphdr.flags & TCPFlag::SYN || tcphdr.flags & TCPFlag::PSH || tcphdr.flags & TCPFlag::FIN)
+    {
+        TCPHeader tmp;
+        auto p = std::make_shared<TCPSegment>(
+            &tmp,
+            nullptr,
+            _send_buffer.getSeqNumber(),
+            sizeof(TCPHeader),
+            sizeof(TCPHeader),
+            TCPFlag::ACK
+        );
+        _engine.send(p, _local_addr, _peer_addr, _recv_buffer);
+        if (_state == SocketState::SYN_SENT)
+        {
+            std::lock_guard lg(m_);
+            _state = SocketState::ESTABLISHED;
+        }
+        //TODO: is the right place to wake up blocked recv calls?
+        cv_.notify_all();
+    }
+    
+}
+
 ssize_t StreamSocket::recv(std::byte* buf, size_t len)
 {
-    size_t available = _recv_buffer.availableDataSize();
-    ssize_t copySz;
-    if (available == 0)
-    {
-        // No data available, wait
-        std::unique_lock<std::mutex> lock(m_);
-        cv_.wait(lock, [this]() {
-            return _recv_buffer.availableDataSize() > 0;
-        });
-        available = _recv_buffer.availableDataSize();
-        copySz = std::min(len, available);
-        copySz = _recv_buffer.dequeue(buf, copySz); // TODO: handle error
-    }
-    return copySz;
+    std::unique_lock<std::mutex> lock(m_);
+    cv_.wait(lock, [this]() {
+        return _recv_buffer.availableData();
+    });
+    return _recv_buffer.dequeue(buf, len);
 }
 
 

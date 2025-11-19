@@ -18,6 +18,17 @@ TCPHeader::TCPHeader(const std::byte* buf)
     urgent_pointer = ntohs(*reinterpret_cast<const uint16_t*>(buf + 18));
 }
 
+void TCPHeader::switchByteOrder()
+{
+    src_port = ntohs(src_port);
+    dst_port = ntohs(dst_port);
+    seq_num = ntohl(seq_num);
+    ack_num = ntohl(ack_num);
+    window_size = ntohs(window_size);
+    checksum = ntohs(checksum);
+    urgent_pointer = ntohs(urgent_pointer);
+}
+
 int TCPHeader::writeNetworkBytes(std::byte* buf) const
 {
     uint16_t src_port_n = htons(src_port);
@@ -85,33 +96,6 @@ int PseudoIPv4Header::writeNetworkBytes(std::byte* buf) const
     return 0;
 }
 
-
-
-TCPData::TCPData(const std::byte* p, size_t len)
-:   payload(p), 
-    payload_len(len) {}
-
-TCPData::TCPData(const std::shared_ptr<TCPSegment>& seg)
-{
-    if (seg->brk_len_ != seg->len_)
-    {
-        payload = new std::byte[seg->len_];
-        memcpy(const_cast<std::byte*>(payload), seg->data_, seg->brk_len_);
-        memcpy(const_cast<std::byte*>(payload) + seg->brk_len_, seg->data2_, seg->len_ - seg->brk_len_);
-    }
-    else
-    {
-        payload = seg->data_;
-    }
-    payload_len = seg->len_;
-}
-
-int TCPData::writeNetworkBytes(std::byte* buf) const
-{
-    memcpy(buf, payload, payload_len);
-    return 0;
-}
-
 InternetChecksumBuilder::InternetChecksumBuilder() : _sum(0) {}
 
 void InternetChecksumBuilder::add(const void* buf, size_t len)
@@ -139,68 +123,6 @@ void InternetChecksumBuilder::add(const void* buf, size_t len)
 uint16_t InternetChecksumBuilder::finalize()
 {
     return (uint16_t)(~_sum);
-}
-
-Frame::Frame() {}
-
-Frame::Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload)
-:   _iphdr(iphdr), 
-    _tcphdr(tcphdr), 
-    _payload(payload), 
-    _buf(nullptr), 
-    _cap(0), 
-    _len(0)
-    {}
-
-int Frame::writeNetworkBytes()
-{
-    _len = sizeof(PseudoIPv4Header) + sizeof(TCPHeader) + _payload.payload_len;
-    _buf = new std::byte[_len];
-    if (!_buf) return -1; // FIXME: handle error
-
-    size_t offset = 0;
-    if (_iphdr.writeNetworkBytes(_buf) < 0) return -1;
-    offset += sizeof(PseudoIPv4Header);
-    if (_tcphdr.writeNetworkBytes(_buf + offset) < 0) return -1;
-    offset += sizeof(TCPHeader);
-    if (_payload.writeNetworkBytes(_buf + offset) < 0) return -1;
-    return 0;
-}
-
-int Frame::computeAndWriteChecksum()
-{
-    // TODO: handle error
-    InternetChecksumBuilder checksum_builder;
-    checksum_builder.add(_buf, _len);
-    uint16_t checksum = htons(checksum_builder.finalize());
-    // Write checksum back to TCP header
-    memcpy(_buf + sizeof(PseudoIPv4Header) + TCPHeader::getCheckSumOffset(), &checksum, sizeof(checksum));
-    return 0;
-}
-
-size_t Frame::getTCPSegmentLength() const
-{ 
-    return sizeof(TCPHeader) + _payload.payload_len; 
-}
-
-const std::byte* Frame::getTCPSegmentBuffer() const
-{ 
-    return _buf + sizeof(PseudoIPv4Header); 
-}
-
-const uint32_t Frame::getDestinationIP() const
-{ 
-    return _iphdr.dst_addr; 
-}
-
-const uint32_t Frame::getStartSeqNum() const
-{
-    return _tcphdr.seq_num;
-}
-
-const uint32_t Frame::getEndSeqNum() const
-{
-    return _tcphdr.seq_num + _payload.payload_len + 1;
 }
 
 IPHeader::IPHeader(const std::byte* buf)

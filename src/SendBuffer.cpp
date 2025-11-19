@@ -53,6 +53,10 @@ void SendBuffer::setLocalAddr(const SocketAddr& local_addr) { local_addr_ = loca
 
 void SendBuffer::setPeerAddr(const SocketAddr& peer_addr) { peer_addr_ = peer_addr; }
 
+const uint32_t SendBuffer::getSeqNumber() const
+{
+    return next_seq_num_;
+}
 
 ssize_t SendBuffer::enqueue(const std::byte* data, size_t len, const uint8_t flags)
 {

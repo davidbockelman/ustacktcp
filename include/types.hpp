@@ -38,6 +38,8 @@ struct TCPHeader {
     TCPHeader() = default;
 
     TCPHeader(const std::byte* buf);
+
+    void switchByteOrder();
     
     static size_t getCheckSumOffset();
 
@@ -81,61 +83,18 @@ struct PseudoIPv4Header {
     int writeNetworkBytes(std::byte* buf) const;
 };
 
-struct TCPData {
-    const std::byte* payload;
-    size_t payload_len;
-
-    TCPData() = default;
-    
-    TCPData(const TCPData& other) = default;
-
-    TCPData(const std::shared_ptr<TCPSegment>&);
-    
-    TCPData(const std::byte* p, size_t len);
-
-    int writeNetworkBytes(std::byte* buf) const;
-};
-
 struct InternetChecksumBuilder {
     private:
         uint32_t _sum = 0;
 
     public:
+    InternetChecksumBuilder();
+
         void add(const void* buf, size_t len);
 
         uint16_t finalize();
 };
 
-struct Frame {
-    private:
-        PseudoIPv4Header _iphdr;
-        TCPHeader _tcphdr;
-        TCPData _payload;
-    
-        std::byte* _buf;
-        size_t _cap;
-        size_t _len;
-
-    public:
-        Frame();
-    
-        Frame(PseudoIPv4Header& iphdr, TCPHeader& tcphdr, TCPData& payload);
-
-        int writeNetworkBytes();
-
-        int computeAndWriteChecksum();
-
-        size_t getTCPSegmentLength() const;
-
-        const std::byte* getTCPSegmentBuffer() const;
-
-        const uint32_t getDestinationIP() const;
-
-        const uint32_t getStartSeqNum() const;
-
-        const uint32_t getEndSeqNum() const;
-
-};
 
 // TODO: include options
 struct IPHeader {

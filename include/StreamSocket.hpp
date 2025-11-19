@@ -12,6 +12,7 @@
 namespace ustacktcp {
 
 class TCPEngine;
+class SendBuffer;
 
 class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
     private:
@@ -29,6 +30,7 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
         std::condition_variable cv_;
 
         friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
+        // friend void TCPEngine::recv();
     public:
         StreamSocket(TCPEngine& engine);
         SocketState _state = SocketState::CLOSED;
@@ -52,7 +54,7 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
 
         ssize_t recv(std::byte* buf, size_t len);
 
-        void handleSegment(const TCPSegment& segment, const SocketAddr& src_addr);
+        void handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_addr);
 };
 
 }

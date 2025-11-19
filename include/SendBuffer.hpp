@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <stddef.h>
@@ -10,6 +12,8 @@
 
 namespace ustacktcp {
 
+class TCPEngine;
+class RecvBuffer;
 
 class SendBuffer {
     private:
@@ -56,6 +60,8 @@ class SendBuffer {
         void setLocalAddr(const SocketAddr&);
 
         void setPeerAddr(const SocketAddr&);
+
+        const uint32_t getSeqNumber() const;
 
         ssize_t enqueue(const std::byte* data, size_t len, const uint8_t flags);
 

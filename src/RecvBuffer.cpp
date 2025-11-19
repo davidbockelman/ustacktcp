@@ -3,66 +3,79 @@
 #include <algorithm>
 #include <iostream>
 
+namespace ustacktcp {
+
 RecvBuffer::RecvBuffer() {}
 
-void RecvBuffer::build(uint32_t irs)
+void RecvBuffer::setIRS(const uint32_t irs)
 {
-    irs_ = irs;
-    tail_ = irs;
-    nxt_ = irs + 1;
-    buf_ = new std::byte[sz_]; // FIXME: hardcoded max size
+    ack_ = irs+1;
 }
 
-ssize_t RecvBuffer::enqueue(uint32_t seq_num, const std::byte* data, size_t len)
+size_t RecvBuffer::getSize() const
 {
-    if (seq_num < nxt_) // already received
-        return 0;
-    if (seq_num > nxt_) // out of order
-        return -1; // FIXME: add error code
-    auto bLen = (nxt_ + sz_ - tail_) % sz_;
-    auto free_sz = sz_ - bLen;
-    if (free_sz < len) return -1; // FIXME: add error code
-    auto firstBlockSz = std::min(sz_-(nxt_%sz_),len);
-    auto firstBlockStart = buf_+(nxt_%sz_);
-    memcpy(firstBlockStart, data, firstBlockSz);
-    if (firstBlockSz < len)
-    {
-        auto secondBlockSz = len - firstBlockSz;
-        memcpy(buf_,data+firstBlockSz,secondBlockSz);
-    }
-    nxt_ += len;
-    return len;
+    return (tail_ + sz_ - head_) % sz_;
 }
 
-ssize_t RecvBuffer::dequeue(std::byte* dest, size_t len)
+size_t RecvBuffer::getAvailSize() const
 {
-    auto avail_sz = availableDataSize();
-    auto to_copy = std::min(static_cast<size_t>(avail_sz),len);
-    auto firstBlockSz = std::min(sz_-(tail_%sz_),to_copy);
-    auto firstBlockStart = buf_+(tail_%sz_);
-    memcpy(dest, firstBlockStart, firstBlockSz);
-    if (firstBlockSz < to_copy)
+    return sz_ - getSize() - 1;
+}
+
+ssize_t RecvBuffer::enqueue(const std::byte* data, const size_t len, const uint32_t seq_num)
+{
+    if (len > getAvailSize()) return -1; //FIXME: handle error
+
+    auto firstBlockStart = buf_ + tail_;
+    auto firstBlockSize = std::min(len, sz_-tail_);
+    memcpy(firstBlockStart, data, firstBlockSize);
+    if (firstBlockSize < len)
     {
-        auto secondBlockSz = to_copy - firstBlockSz;
-        memcpy(dest+firstBlockSz,buf_,secondBlockSz);
+        memcpy(buf_, data + firstBlockSize, len - firstBlockSize);
     }
-    tail_ += to_copy;
-    return to_copy;
+    tail_ = (tail_ + len) % sz_;
+
+    const auto p = std::make_shared<TCPSegment>(
+        data,
+        buf_,
+        seq_num,
+        len,
+        firstBlockSize,
+        TCPFlag::PSH
+    );
+
+    q_.push(p);
+}
+
+ssize_t RecvBuffer::dequeue(std::byte* dest, const size_t len)
+{
+    size_t copySz = 0;
+    while (availableData() && q_.top()->len_ <= len - copySz)
+    {
+        const auto p = q_.top();
+        memcpy(dest + copySz, p->data_, p->brk_len_);
+        copySz += p->brk_len_;
+        memcpy(dest + copySz, p->data2_, p->len_ - p->brk_len_);
+        copySz += p->len_ - p->brk_len_;
+        ack_ += p->len_;
+        q_.pop();
+    }
+    return copySz;
 }
 
 uint32_t RecvBuffer::getAckNumber() const
 {
-    return nxt_;
+    return ack_;
 }
 
-uint16_t RecvBuffer::availableDataSize() const
+bool RecvBuffer::availableData() const
 {
-    if (nxt_ == irs_+1) return 0;
-    return (nxt_ + sz_ - tail_) % sz_;
+    return !q_.empty() && q_.top()->flags_ & TCPFlag::PSH && q_.top()->seq_start_ == ack_;
 }
 
 uint16_t RecvBuffer::getWindowSize() const
 {
-    auto bLen = (nxt_ + sz_ - tail_) % sz_;
-    return static_cast<uint16_t>(sz_ - bLen);
+    return getAvailSize();
+}
+
 }

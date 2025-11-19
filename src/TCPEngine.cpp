@@ -98,50 +98,28 @@ void TCPEngine::recv() {
             return;
         }
         IPHeader ip_header(buffer);
-        if (!ip_header.nextProtoIsTCP()) {
-            // Not a TCP packet
-            // std::cout << "Non-TCP packet received, skipping." << std::endl;
-            continue;
-        }
-        TCPHeader tcp_header(buffer + ip_header.getHeaderLength());
+        if (!ip_header.nextProtoIsTCP()) continue;
+
+        TCPHeader tcphdr(buffer + ip_header.getHeaderLength());
+
         // TODO: validate checksum
         // TODO: validate ports
-        if (!validTCPPort(tcp_header.src_port) && !validTCPPort(tcp_header.dst_port)) {
-            // Not for us
-            // std::cout << "TCP packet received for invalid port " << tcp_header.src_port << " " << tcp_header.dst_port << ", skipping." << std::endl;
-            continue;
-        }
+        if (!validTCPPort(tcphdr.src_port) && !validTCPPort(tcphdr.dst_port)) continue;
+
         size_t payload_len = data_size - ip_header.getHeaderLength() - sizeof(TCPHeader);
-        const std::byte* payload = new std::byte[payload_len];
-        memcpy((void*)payload, buffer + ip_header.getHeaderLength() + sizeof(TCPHeader), payload_len);
-        TCPData tcp_data(payload, payload_len);
-    
-        // FIXME: pass options
-        TCPSegment segment(tcp_header, TCPOptions(), tcp_data);
-        SocketAddr dst_addr(IPAddr(ip_header.dst_addr), tcp_header.dst_port);
-        SocketAddr src_addr(IPAddr(ip_header.src_addr), tcp_header.src_port);
+        SocketAddr dst_addr(IPAddr(ip_header.dst_addr), tcphdr.dst_port);
+        SocketAddr src_addr(IPAddr(ip_header.src_addr), tcphdr.src_port);
 
-        if (bound.find(dst_addr) == bound.end()) {
-            // No socket bound to this address
-            // std::cout << "No socket bound to "
-            //           << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
-            //           << ":" << tcp_header.dst_port
-            //           << std::endl;
-            continue;
+        if (bound.find(dst_addr) == bound.end()) continue;
+
+        auto sock = bound[dst_addr];
+
+        if (tcphdr.flags & TCPFlag::PSH)
+        {
+            sock->_recv_buffer.enqueue(buffer + ip_header.getHeaderLength() + sizeof(TCPHeader), payload_len, tcphdr.seq_num);
         }
 
-        // std::cout << "Received packet from "
-        //             << inet_ntoa(*(in_addr*)&ip_header.src_addr)
-        //             << ":" << tcp_header.src_port
-        //             << " to "
-        //             << inet_ntoa(*(in_addr*)&ip_header.dst_addr)
-        //             << ":" << tcp_header.dst_port
-        //             << " of size " << data_size << " bytes. "
-        //             << std::endl;
-        std::thread worker(&StreamSocket::handleSegment, bound[dst_addr], segment, src_addr);
-        worker.detach();
-
-        // Process the received TCP segment in 'buffer' of size 'data_size'
+        sock->handleCntrl(tcphdr, src_addr);
     }
 }
 

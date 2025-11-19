@@ -1,28 +1,42 @@
+#pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <stddef.h>
 #include <sys/types.h>
+#include <queue>
+#include <vector>
+#include <types.hpp>
+
+namespace ustacktcp {
 
 class RecvBuffer {
     private:
         std::byte* buf_;
         static constexpr size_t sz_ = 65535; // FIXME: hardcoded max size
         size_t tail_;
-        size_t nxt_;
-        uint32_t irs_;
+        size_t head_;
+        uint32_t ack_;
+
+        std::priority_queue<std::shared_ptr<TCPSegment>, std::vector<std::shared_ptr<TCPSegment>>, TCPSegmentCompare> q_;
+
+        size_t getSize() const;
+        size_t getAvailSize() const;
 
     public:
         RecvBuffer();
 
-        void build(uint32_t irs);
+        void setIRS(const uint32_t irs);
 
-        ssize_t enqueue(uint32_t seq_num, const std::byte* data, size_t len);
+        ssize_t enqueue(const std::byte* data, const size_t len, const uint32_t seq_num);
 
-        ssize_t dequeue(std::byte* dest, size_t len);
+        ssize_t dequeue(std::byte* dest, const size_t len);
 
         uint32_t getAckNumber() const;
 
-        uint16_t availableDataSize() const;
+        bool availableData() const;
 
         uint16_t getWindowSize() const;
 };
+
+}
