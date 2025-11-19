@@ -112,7 +112,7 @@ void InternetChecksumBuilder::add(const void* buf, size_t len)
     }
     if (len > 0)
     {
-        _sum += *(reinterpret_cast<const uint8_t*>(words));
+        _sum += ((uint16_t)*(reinterpret_cast<const uint8_t*>(words)) << 8);
     }
     if (_sum & 0xFFFF0000)
     {

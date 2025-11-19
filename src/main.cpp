@@ -17,30 +17,30 @@
 
 using namespace ustacktcp;
 
-// void recvLoop(StreamSocket& s)
-// {
-//     std::byte buf[65535];
-//     ssize_t data_sz;
-//     while (data_sz = s.recv(buf, 65535))
-//     {
-//         buf[data_sz-1] = std::byte {};
-//         const char* in = reinterpret_cast<const char*>(buf);
-//         std::cout << std::string(in, data_sz) << std::endl;
-//     }
-// }
+void recvLoop(const std::shared_ptr<StreamSocket>& s)
+{
+    std::byte buf[65535];
+    ssize_t data_sz;
+    while (data_sz = s->recv(buf, 65535))
+    {
+        buf[data_sz-1] = std::byte {};
+        const char* in = reinterpret_cast<const char*>(buf);
+        std::cout << std::string(in, data_sz) << std::endl;
+    }
+}
 
-// void sendLoop(StreamSocket& s)
-// {
-//     std::string line;
-//     while (std::getline(std::cin, line))
-//     {
-//         line.append(1, '\n');
-//         const char* data = line.data();
-//         size_t len = line.size();
-//         std::byte* buf = const_cast<std::byte*>(reinterpret_cast<const std::byte*>(data));
-//         s.send(buf, len);
-//     }
-// }
+void sendLoop(const std::shared_ptr<StreamSocket>& s)
+{
+    std::string line;
+    while (std::getline(std::cin, line))
+    {
+        line.append(1, '\n');
+        const char* data = line.data();
+        size_t len = line.size();
+        std::byte* buf = const_cast<std::byte*>(reinterpret_cast<const std::byte*>(data));
+        s->send(buf, len);
+    }
+}
 
 int main() {
 
@@ -53,10 +53,10 @@ int main() {
     socket->bind(local_addr);
     socket->connect(peer_addr);
 
-    // std::thread recvThr(recvLoop, std::ref(socket));
-    // recvThr.detach();
+    std::thread recvThr(recvLoop, std::ref(socket));
+    recvThr.detach();
     
-    // sendLoop(socket);
+    sendLoop(socket);
 
     return 0;
 }

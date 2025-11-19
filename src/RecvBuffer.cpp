@@ -5,7 +5,12 @@
 
 namespace ustacktcp {
 
-RecvBuffer::RecvBuffer() {}
+RecvBuffer::RecvBuffer() 
+{
+    tail_ = 0;
+    head_ = 0;
+    buf_ = new std::byte[sz_];
+}
 
 void RecvBuffer::setIRS(const uint32_t irs)
 {
@@ -35,6 +40,8 @@ ssize_t RecvBuffer::enqueue(const std::byte* data, const size_t len, const uint3
     }
     tail_ = (tail_ + len) % sz_;
 
+    if (seq_num == ack_) ack_ += len;
+
     const auto p = std::make_shared<TCPSegment>(
         data,
         buf_,
@@ -58,7 +65,6 @@ ssize_t RecvBuffer::dequeue(std::byte* dest, const size_t len)
         copySz += p->brk_len_;
         memcpy(dest + copySz, p->data2_, p->len_ - p->brk_len_);
         copySz += p->len_ - p->brk_len_;
-        ack_ += p->len_;
         q_.pop();
     }
     return copySz;
@@ -71,7 +77,7 @@ uint32_t RecvBuffer::getAckNumber() const
 
 bool RecvBuffer::availableData() const
 {
-    return !q_.empty() && q_.top()->flags_ & TCPFlag::PSH && q_.top()->seq_start_ == ack_;
+    return !q_.empty() && q_.top()->flags_ & TCPFlag::PSH && q_.top()->seq_start_ < ack_;
 }
 
 uint16_t RecvBuffer::getWindowSize() const

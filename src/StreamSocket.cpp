@@ -19,6 +19,8 @@ bool StreamSocket::bind(const SocketAddr& addr)
 bool StreamSocket::connect(const SocketAddr& addr)
 {
     // Send SYN
+    _peer_addr = addr;
+    _send_buffer.setPeerAddr(addr);
     _state = SocketState::SYN_SENT;
     _send_buffer.enqueue(nullptr, 0, TCPFlag::SYN);
 
@@ -43,7 +45,7 @@ bool StreamSocket::listen()
 ssize_t StreamSocket::send(const std::byte* buf, size_t len)
 {
     // Enqueue data into send buffer
-    ssize_t enq_bytes = _send_buffer.enqueue(buf, len, TCPFlag::PSH);
+    ssize_t enq_bytes = _send_buffer.enqueue(buf, len, TCPFlag::PSH | TCPFlag::ACK);
     if (enq_bytes < 0)
     {
         return -1; // FIXME: handle error
@@ -73,6 +75,11 @@ void StreamSocket::handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_ad
             _state = SocketState::ESTABLISHED;
             cv_.notify_all();
         }
+    }
+
+    if (tcphdr.flags & TCPFlag::SYN)
+    {
+        _recv_buffer.setIRS(tcphdr.seq_num);
     }
 
     //TODO: make sure FIN works
