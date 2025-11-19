@@ -24,7 +24,7 @@ std::shared_ptr<StreamSocket> make_socket(TCPEngine& engine)
     return ptr;
 }
     
-TCPEngine::TCPEngine() 
+TCPEngine::TCPEngine()
 {
     _raw_fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
     if (_raw_fd < 0)
@@ -32,12 +32,15 @@ TCPEngine::TCPEngine()
         perror("TCPEngine::socket");
         exit(1);
     }
+    std::thread t(&TimerManager::timeoutLoop, &timer_);
+    t.detach();
 }
 
 bool TCPEngine::bind(const SocketAddr& addr, std::shared_ptr<StreamSocket> socket) {
     if (bound.find(addr) != bound.end()) {
         return false;
     }
+    timer_.insertSocket(socket);
     bound[addr] = socket;
     return true;
 }

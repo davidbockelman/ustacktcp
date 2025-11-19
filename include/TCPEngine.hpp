@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <types.hpp>
+#include <TimerManager.hpp>
 
 namespace ustacktcp {
 
@@ -27,6 +28,9 @@ class TCPEngine {
     int _raw_fd;
     
     friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
+
+    TimerManager timer_;
+
     public:
     
     TCPEngine();

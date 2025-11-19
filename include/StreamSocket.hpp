@@ -11,6 +11,7 @@
 #include <SendBuffer.hpp>
 #include <RecvBuffer.hpp>
 #include <TCPEngine.hpp>
+#include <TimerManager.hpp>
 
 namespace ustacktcp {
 
@@ -31,6 +32,7 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
 
         friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
         friend void TCPEngine::recv();
+        friend void TimerManager::timeoutLoop();
     public:
         StreamSocket(TCPEngine& engine);
         SocketState _state = SocketState::CLOSED;

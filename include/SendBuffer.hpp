@@ -69,6 +69,8 @@ class SendBuffer {
         void handleACK(const uint32_t ack_num, const std::chrono::steady_clock::time_point ack_timestmp);
 
         void handleRTO();
+
+        std::chrono::steady_clock::time_point getRTOExpiry() const;
 };
 
 }

@@ -36,9 +36,9 @@ void SendBuffer::sendSegments()
     std::shared_ptr<TCPSegment> p = next_q_.top();
     // send logic
     if (in_flight_q_.empty()) restartRTO();
-    engine_.send(p, local_addr_, peer_addr_, recv_buf_);
     next_q_.pop();
     in_flight_q_.push(p);
+    engine_.send(p, local_addr_, peer_addr_, recv_buf_);
 }
 
 SendBuffer::SendBuffer(TCPEngine& engine, RecvBuffer& recv_buf) 
@@ -162,6 +162,11 @@ void SendBuffer::handleRTO()
     restartRTO();
     // send logic
     engine_.send(p, local_addr_, peer_addr_, recv_buf_);
+}
+
+std::chrono::steady_clock::time_point SendBuffer::getRTOExpiry() const
+{
+    return to_expiry_;
 }
 
 }
