@@ -55,6 +55,8 @@ ssize_t StreamSocket::send(const std::byte* buf, size_t len)
 
 void StreamSocket::handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_addr)
 {
+    _send_buffer.setRcvWnd(tcphdr.window_size);
+    
     if (tcphdr.flags == TCPFlag::SYN)
     {
         std::lock_guard lg(m_);

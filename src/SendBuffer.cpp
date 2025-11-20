@@ -7,6 +7,23 @@
 
 namespace ustacktcp {
 
+void SendBuffer::updateCwnd(const size_t bytes_acked)
+{
+    if (cwnd_ >= ssthresh_)
+    {
+        cwnd_ += (MSS * bytes_acked / cwnd_);
+    }
+    else
+    {
+        cwnd_ += bytes_acked;
+    }
+}
+    
+bool SendBuffer::canSend(const size_t n) const
+{
+    return (in_flight_sz_ + n <= std::min(rcvwnd_,cwnd_));
+}
+
 size_t SendBuffer::getAvailSize() const
 {
     return sz_ - getSize() - 1;
@@ -31,14 +48,16 @@ void SendBuffer::sendSegments()
 {
     if (next_q_.empty()) return;
     
-    //TODO: implement window checking
-    // while (cond)
-    std::shared_ptr<TCPSegment> p = next_q_.top();
-    // send logic
-    if (in_flight_q_.empty()) restartRTO();
-    next_q_.pop();
-    in_flight_q_.push(p);
-    engine_.send(p, local_addr_, peer_addr_, recv_buf_);
+    while (!next_q_.empty() && canSend(next_q_.top()->len_ - sizeof(TCPHeader)))
+    {
+        std::shared_ptr<TCPSegment> p = next_q_.top();
+        // send logic
+        if (in_flight_q_.empty()) restartRTO();
+        next_q_.pop();
+        in_flight_sz_ += (p->len_ - sizeof(TCPHeader));
+        in_flight_q_.push(p);
+        engine_.send(p, local_addr_, peer_addr_, recv_buf_);
+    }
 }
 
 SendBuffer::SendBuffer(TCPEngine& engine, RecvBuffer& recv_buf) 
@@ -53,6 +72,8 @@ SendBuffer::SendBuffer(TCPEngine& engine, RecvBuffer& recv_buf)
 void SendBuffer::setLocalAddr(const SocketAddr& local_addr) { local_addr_ = local_addr; }
 
 void SendBuffer::setPeerAddr(const SocketAddr& peer_addr) { peer_addr_ = peer_addr; }
+
+void SendBuffer::setRcvWnd(const uint16_t rcvwnd) { rcvwnd_ = rcvwnd; };
 
 const uint32_t SendBuffer::getSeqNumber() const
 {
@@ -133,6 +154,7 @@ void SendBuffer::handleACK(const uint32_t ack_num, const std::chrono::steady_clo
     //TODO: implement binary search
     bool rtt_probed = false;
     auto prev_head = head_;
+    size_t bytes_acked = 0;
     while (!in_flight_q_.empty() && ack_num > in_flight_q_.top()->seq_start_)
     {
         auto cur = in_flight_q_.top();
@@ -143,9 +165,14 @@ void SendBuffer::handleACK(const uint32_t ack_num, const std::chrono::steady_clo
             rtt_probed = true;
         }
         head_ = (head_ + cur->len_) % sz_;
+        auto seq_bytes = (cur->len_ - sizeof(TCPHeader));
+        in_flight_sz_ -= seq_bytes;
+        bytes_acked += seq_bytes;
         in_flight_q_.pop();
     }
     if (!in_flight_q_.empty() && ack_num != in_flight_q_.top()->seq_start_); // TODO: handle out of sync error
+
+    updateCwnd(bytes_acked);
 
     if (prev_head != head_)
     {
@@ -158,7 +185,19 @@ void SendBuffer::handleRTO()
 {
     if (in_flight_q_.empty()) return;
     auto p = in_flight_q_.top();
+    if ((p->flags_ && TCPFlag::SYN && p->retransmit_cnt_ >= TCP_SYN_RETRIES) ||
+        (p->flags_ && TCPFlag::PSH && p->retransmit_cnt_ >= TCP_RETRIES))
+    {
+        // FIXME: handle error
+        in_flight_sz_ -= (p->len_ - sizeof(TCPHeader));
+        in_flight_q_.pop();
+        return;   
+    }
     p->retransmit_cnt_++;
+    rto_ *= 2;
+    rto_ = std::clamp(rto_, RTO_MIN, RTO_MAX);
+    ssthresh_ = cwnd_ / 2;
+    cwnd_ = MSS;
     restartRTO();
     // send logic
     engine_.send(p, local_addr_, peer_addr_, recv_buf_);
