@@ -38,7 +38,11 @@ bool StreamSocket::connect(const SocketAddr& addr)
 bool StreamSocket::listen()
 {
     _state = SocketState::LISTEN;
-    return true;
+    std::unique_lock<std::mutex> lock(m_);
+    cv_.wait(lock, [this]() {
+        return _state == SocketState::CLOSED || _state == SocketState::ESTABLISHED;
+    });
+    return _state == SocketState::ESTABLISHED;
 }
 
 
@@ -65,7 +69,7 @@ void StreamSocket::handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_ad
         _recv_buffer.setIRS(tcphdr.seq_num);
         // TODO: check state
         _state = SocketState::SYN_RECEIVED;
-        _send_buffer.enqueue(nullptr, 0, TCPFlag::SYN & TCPFlag::ACK);
+        _send_buffer.enqueue(nullptr, 0, TCPFlag::SYN | TCPFlag::ACK);
         return;
     }
 

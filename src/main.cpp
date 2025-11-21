@@ -49,9 +49,9 @@ int main() {
     reciever.detach();
     auto socket = make_socket(engine);
     SocketAddr local_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40000);
-    SocketAddr peer_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40012);
+    // SocketAddr peer_addr(IPAddr(ntohl(inet_addr("127.0.0.1"))), 40012);
     socket->bind(local_addr);
-    socket->connect(peer_addr);
+    socket->listen();
 
     std::thread recvThr(recvLoop, std::ref(socket));
     recvThr.detach();
