@@ -9,6 +9,11 @@
 
 namespace ustacktcp {
 
+#define SEQ_LT(a,b)   ((int32_t)((a) - (b)) < 0)
+#define SEQ_LEQ(a,b)  ((int32_t)((a) - (b)) <= 0)
+#define SEQ_GT(a,b)   ((int32_t)((a) - (b)) > 0)
+#define SEQ_GEQ(a,b)  ((int32_t)((a) - (b)) >= 0)
+
 
 enum SocketState {
     CLOSED,
@@ -116,6 +121,8 @@ struct IPHeader {
     bool nextProtoIsTCP() const;
 
     size_t getHeaderLength() const;
+
+    uint8_t getVersion() const;
 };
 
 struct TCPSegment {
@@ -140,15 +147,21 @@ struct TCPSegment {
     {}
 };
 
-struct TCPSegmentCompare {
+struct TCPSegmentHeapCompare {
     bool operator()(const std::shared_ptr<TCPSegment>& a, const std::shared_ptr<TCPSegment>& b) const
     {
         return a->seq_start_ > b->seq_start_;
     }
 };
 
-// FIXME: what size int is this?
-enum TCPFlag {
+struct TCPSegmentMapCompare {
+    bool operator()(uint32_t a, uint32_t b) const {
+        // true if a is "less than" b in TCP seq space
+        return SEQ_LT(a, b);
+    }
+};
+
+enum TCPFlag : uint8_t {
     FIN = 0x01,
     SYN = 0x02,
     RST = 0x04,

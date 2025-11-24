@@ -25,8 +25,8 @@ class SendBuffer {
         uint32_t next_seq_num_ = 100; //FIXME: hardcoded iss
         uint32_t ack_num_ = 100;
         
-        std::priority_queue<std::shared_ptr<TCPSegment>, std::vector<std::shared_ptr<TCPSegment>>, TCPSegmentCompare> in_flight_q_;
-        std::priority_queue<std::shared_ptr<TCPSegment>, std::vector<std::shared_ptr<TCPSegment>>, TCPSegmentCompare> next_q_;
+        std::priority_queue<std::shared_ptr<TCPSegment>, std::vector<std::shared_ptr<TCPSegment>>, TCPSegmentHeapCompare> in_flight_q_;
+        std::priority_queue<std::shared_ptr<TCPSegment>, std::vector<std::shared_ptr<TCPSegment>>, TCPSegmentHeapCompare> next_q_;
 
         std::chrono::steady_clock::time_point to_expiry_;
         std::chrono::steady_clock::duration srtt_;

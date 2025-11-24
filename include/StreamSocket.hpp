@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <map>
 #include <chrono>
+#include <optional>
 
 #include <types.hpp>
 #include <SendBuffer.hpp>
@@ -20,15 +21,16 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
         TCPEngine& _engine;
 
         RecvBuffer _recv_buffer;
-        SendBuffer _send_buffer; // FIXME: randomize
-
-        uint32_t _iss = 1910533701; // FIXME: randomize
+        SendBuffer _send_buffer; 
 
         SocketAddr _local_addr;
         SocketAddr _peer_addr;
 
         std::mutex m_;
         std::condition_variable cv_;
+
+        bool validSeqNum(uint32_t seq_start, size_t len) const;
+        bool validFlags(uint8_t flags) const;
 
         friend std::shared_ptr<StreamSocket> make_socket(TCPEngine&);
         friend void TCPEngine::recv();
@@ -56,7 +58,7 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
 
         ssize_t recv(std::byte* buf, size_t len);
 
-        void handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_addr);
+        std::optional<uint8_t> handleCntrl(const TCPHeader& tcphdr, const SocketAddr& src_addr, const size_t data_len);
 };
 
 }

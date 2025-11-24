@@ -4,8 +4,7 @@
 #include <cstdint>
 #include <stddef.h>
 #include <sys/types.h>
-#include <queue>
-#include <vector>
+#include <map>
 #include <memory>
 
 #include <types.hpp>
@@ -20,7 +19,7 @@ class RecvBuffer {
         size_t head_;
         uint32_t ack_;
 
-        std::priority_queue<std::shared_ptr<TCPSegment>, std::vector<std::shared_ptr<TCPSegment>>, TCPSegmentCompare> q_;
+        std::map<uint32_t, std::shared_ptr<TCPSegment>, TCPSegmentMapCompare> q_;
 
         size_t getSize() const;
         size_t getAvailSize() const;
@@ -30,13 +29,13 @@ class RecvBuffer {
 
         void setIRS(const uint32_t irs);
 
-        ssize_t enqueue(const std::byte* data, const size_t len, const uint32_t seq_num);
+        ssize_t enqueue(const std::byte* data, const size_t len, const uint32_t seq_num, const uint8_t flags);
 
         ssize_t dequeue(std::byte* dest, const size_t len);
 
         uint32_t getAckNumber() const;
 
-        bool availableData() const;
+        bool availableData();
 
         uint16_t getWindowSize() const;
 };

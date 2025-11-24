@@ -110,21 +110,52 @@ void TCPEngine::recv() {
         // TODO: validate checksum
         // TODO: validate ports
         if (!validTCPPort(tcphdr.src_port) && !validTCPPort(tcphdr.dst_port)) continue;
+        if (ip_header.getVersion() != 4) continue;
 
-        size_t payload_len = data_size - ip_header.getHeaderLength() - sizeof(TCPHeader);
+        size_t tcphdr_sz = tcphdr.data_offset >> 2;
+        size_t payload_len = data_size - ip_header.getHeaderLength() - tcphdr_sz;
         SocketAddr dst_addr(IPAddr(ip_header.dst_addr), tcphdr.dst_port);
         SocketAddr src_addr(IPAddr(ip_header.src_addr), tcphdr.src_port);
 
         if (bound.find(dst_addr) == bound.end()) continue;
 
         auto sock = bound[dst_addr];
+        
+        auto flags = sock->handleCntrl(tcphdr, src_addr, payload_len);
 
-        if (tcphdr.flags & TCPFlag::PSH)
+        if (!flags) continue; // packet was dropped
+
+        bool consumes_seq = (tcphdr.flags & TCPFlag::SYN) || (tcphdr.flags & TCPFlag::FIN) || payload_len > 0;
+        
+        if (consumes_seq)
         {
-            sock->_recv_buffer.enqueue(buffer + ip_header.getHeaderLength() + sizeof(TCPHeader), payload_len, tcphdr.seq_num);
+            sock->_recv_buffer.enqueue(buffer + ip_header.getHeaderLength() + tcphdr_sz, payload_len, tcphdr.seq_num, tcphdr.flags);
+            sock->cv_.notify_all();
         }
 
-        sock->handleCntrl(tcphdr, src_addr);
+        uint8_t res_flags = *flags;
+        if (res_flags == 0) continue; // no response
+
+        bool response_consumes_seq = (res_flags & TCPFlag::SYN) || (res_flags & TCPFlag::FIN); // never responding with data
+        if (response_consumes_seq)
+        {
+            sock->_send_buffer.enqueue(nullptr, 0, res_flags);
+            continue;
+        }
+
+        // response does not consume seq num (i.e. ack)
+        TCPHeader tmp;
+
+        auto p = std::make_shared<TCPSegment>(
+            reinterpret_cast<std::byte*>(&tmp),
+            nullptr,
+            sock->_send_buffer.getSeqNumber(),
+            sizeof(TCPHeader),
+            sizeof(TCPHeader),
+            res_flags
+        );
+
+        send(p, sock->_local_addr, sock->_peer_addr, sock->_recv_buffer);
     }
 }
 

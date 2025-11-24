@@ -149,6 +149,11 @@ size_t IPHeader::getHeaderLength() const
     return (version_ihl & 0x0F) * 4;
 }
 
+uint8_t IPHeader::getVersion() const
+{
+    return version_ihl >> 4;
+}
+
 // FIXME: copying
 
 }

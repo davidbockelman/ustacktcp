@@ -20,7 +20,12 @@ void TimerManager::timeoutLoop()
         const auto now = std::chrono::steady_clock::now();
         for (const auto p : sock_)
         {
-            if (p->_state == SocketState::ESTABLISHED && p->_send_buffer.getRTOExpiry() < now)
+            SocketState s;
+            {
+                std::lock_guard lock(p->m_);
+                s = p->_state;
+            }
+            if (s != SocketState::CLOSED && p->_send_buffer.getRTOExpiry() < now)
             {
                 p->_send_buffer.handleRTO();
             }
