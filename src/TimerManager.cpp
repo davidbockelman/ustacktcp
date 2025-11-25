@@ -29,6 +29,12 @@ void TimerManager::timeoutLoop()
             {
                 p->_send_buffer.handleRTO();
             }
+            s = p->_state;
+            if (s == SocketState::TIME_WAIT && p->time_wait_expiry_ < now)
+            {
+                p->timeWaitTO();
+            }
+
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

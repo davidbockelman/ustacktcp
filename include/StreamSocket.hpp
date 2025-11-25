@@ -29,6 +29,12 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
         std::mutex m_;
         std::condition_variable cv_;
 
+        std::chrono::steady_clock::time_point time_wait_expiry_;
+        static constexpr std::chrono::steady_clock::duration time_wait_to_ = std::chrono::seconds(60);
+
+        void setTimeWaitExipiry();
+        void timeWaitTO();
+
         bool validSeqNum(uint32_t seq_start, size_t len) const;
         bool validFlags(uint8_t flags) const;
 
@@ -48,11 +54,7 @@ class StreamSocket : public std::enable_shared_from_this<StreamSocket> {
 
         bool listen();
 
-        StreamSocket& accept();
-
         bool close();
-
-        bool shutdown();
 
         ssize_t send(const std::byte* buf, size_t len);
 

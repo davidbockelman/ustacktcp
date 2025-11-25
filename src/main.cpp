@@ -23,6 +23,11 @@ void recvLoop(const std::shared_ptr<StreamSocket>& s)
     ssize_t data_sz;
     while (data_sz = s->recv(buf, 65535))
     {
+        if (data_sz == -1)
+        {
+            std::cout << "Socket closed" << std::endl;
+            return;
+        }
         buf[data_sz-1] = std::byte {};
         const char* in = reinterpret_cast<const char*>(buf);
         std::cout << std::string(in, data_sz) << std::endl;
@@ -34,6 +39,11 @@ void sendLoop(const std::shared_ptr<StreamSocket>& s)
     std::string line;
     while (std::getline(std::cin, line))
     {
+        if (line == "close")
+        {
+            auto ret = s->close();
+            break;
+        }
         line.append(1, '\n');
         const char* data = line.data();
         size_t len = line.size();
@@ -54,9 +64,10 @@ int main() {
     socket->listen();
 
     std::thread recvThr(recvLoop, std::ref(socket));
-    recvThr.detach();
     
     sendLoop(socket);
+    
+    recvThr.join();
 
     return 0;
 }

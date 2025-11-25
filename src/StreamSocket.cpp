@@ -5,11 +5,21 @@
 
 namespace ustacktcp {
 
+void StreamSocket::setTimeWaitExipiry()
+{
+    time_wait_expiry_ = std::chrono::steady_clock::now() + time_wait_to_;
+}
+
+void StreamSocket::timeWaitTO()
+{
+    _state = SocketState::CLOSED;
+    cv_.notify_all();
+}
+
 bool StreamSocket::validSeqNum(uint32_t seq_start, size_t len) const
 {
     uint32_t seq_end = seq_start + len - 1;
     uint32_t rcv_start = _recv_buffer.getAckNumber(), rcv_end = rcv_start + _recv_buffer.getWindowSize() -1;
-    // std::cout << "new [" << seq_start << "," << seq_end << "] wnd [" << rcv_start << "," << rcv_end << "]" << std::endl;
     return (SEQ_LEQ(rcv_start,seq_start) && SEQ_LEQ(seq_start,rcv_end)) || (SEQ_LEQ(rcv_start,seq_end) && SEQ_LEQ(seq_end,rcv_end));
 }
 
@@ -137,7 +147,7 @@ bool StreamSocket::validFlags(uint8_t flags) const
 }
 
 // FIXME: delete this constructor and use factory method
-StreamSocket::StreamSocket(TCPEngine& engine) : _engine(engine), _send_buffer(engine, _recv_buffer) {}
+StreamSocket::StreamSocket(TCPEngine& engine) : _engine(engine), _send_buffer(engine, _recv_buffer), time_wait_expiry_(std::chrono::steady_clock::now()) {}
 
 
 bool StreamSocket::bind(const SocketAddr& addr)
@@ -176,6 +186,29 @@ bool StreamSocket::listen()
         return _state == SocketState::CLOSED || _state == SocketState::ESTABLISHED;
     });
     return _state == SocketState::ESTABLISHED;
+}
+
+bool StreamSocket::close()
+{
+    if (_state != SocketState::LISTEN && _state != SocketState::SYN_SENT && _state != SocketState::SYN_RECEIVED && _state != SocketState::ESTABLISHED && _state != SocketState::CLOSE_WAIT)
+    {
+        return false; // TODO: handle error
+    }
+    if (_state == SocketState::LISTEN || _state == SocketState::SYN_SENT)
+    {
+        _state = SocketState::CLOSED;
+        return true;
+    }
+    if (_state == SocketState::CLOSE_WAIT)
+    {
+        _state = SocketState::LAST_ACK;
+    }
+    else
+    {
+        _state = SocketState::FIN_WAIT_1;
+    }
+    _send_buffer.enqueue(nullptr, 0, TCPFlag::FIN | TCPFlag::ACK);
+    return true;
 }
 
 
@@ -280,6 +313,7 @@ std::optional<uint8_t> StreamSocket::handleCntrl(const TCPHeader& tcphdr, const 
             else if (tcphdr.flags == (TCPFlag::FIN | TCPFlag::ACK))
             {
                 res_flags = TCPFlag::ACK;
+                setTimeWaitExipiry();
                 _state = TIME_WAIT;
             }
             else //FIN
@@ -296,16 +330,19 @@ std::optional<uint8_t> StreamSocket::handleCntrl(const TCPHeader& tcphdr, const 
             else //FIN|ACK
             {
                 res_flags = TCPFlag::ACK;
+                setTimeWaitExipiry();
                 _state = SocketState::TIME_WAIT;
             }
             break;
         case SocketState::CLOSE_WAIT:
             break;
         case SocketState::CLOSING:
+            setTimeWaitExipiry();
             _state = SocketState::TIME_WAIT;
             break;
         case SocketState::LAST_ACK:
             _state = SocketState::CLOSED;
+            cv_.notify_all();
             break;
         case SocketState::TIME_WAIT:
             break;
@@ -314,71 +351,15 @@ std::optional<uint8_t> StreamSocket::handleCntrl(const TCPHeader& tcphdr, const 
     }
 
     return res_flags;
-
-    
-    // if (tcphdr.flags == TCPFlag::SYN)
-    // {
-    //     _peer_addr = src_addr;
-    //     _send_buffer.setPeerAddr(src_addr);
-    //     _recv_buffer.setIRS(tcphdr.seq_num);
-    //     // TODO: check state
-    //     {
-    //         std::lock_guard lg(m_);
-    //         if (_state != SocketState::LISTEN && _state != SocketState::SYN_SENT) return; // TODO: handle error
-    //         _state = SocketState::SYN_RECEIVED;
-    //         _send_buffer.enqueue(nullptr, 0, TCPFlag::SYN | TCPFlag::ACK);
-    //     }
-    //     return;
-    // }
-
-    // if (tcphdr.flags & TCPFlag::ACK)
-    // {
-    //     _send_buffer.handleACK(tcphdr.ack_num, std::chrono::steady_clock::now());
-    //     std::lock_guard lock(m_);
-    //     if (_state == SocketState::SYN_RECEIVED)
-    //     {
-    //         _state = SocketState::ESTABLISHED;
-    //         cv_.notify_all();
-    //     }
-    // }
-
-    // if (tcphdr.flags & TCPFlag::SYN)
-    // {
-    //     _recv_buffer.setIRS(tcphdr.seq_num);
-    // }
-
-    // //TODO: make sure FIN works
-    // if (tcphdr.flags & TCPFlag::SYN || tcphdr.flags & TCPFlag::PSH || tcphdr.flags & TCPFlag::FIN)
-    // {
-    //     TCPHeader tmp;
-    //     auto p = std::make_shared<TCPSegment>(
-    //         reinterpret_cast<const std::byte*>(&tmp),
-    //         nullptr,
-    //         _send_buffer.getSeqNumber(),
-    //         sizeof(TCPHeader),
-    //         sizeof(TCPHeader),
-    //         TCPFlag::ACK
-    //     );
-    //     {
-    //         std::lock_guard lg(m_);
-    //         if (_state == SocketState::SYN_SENT)
-    //         {
-    //             _state = SocketState::ESTABLISHED;
-    //         }
-    //     }
-    //     _engine.send(p, _local_addr, _peer_addr, _recv_buffer);
-    //     //TODO: is the right place to wake up blocked recv calls?
-    //     cv_.notify_all();
-    // }
-    
 }
 
 ssize_t StreamSocket::recv(std::byte* buf, size_t len)
 {
     std::unique_lock<std::mutex> lock(m_);
     cv_.wait(lock, [this]() {
-        return _recv_buffer.availableData();
+        return _recv_buffer.availableData() || _state == SocketState::CLOSED;
     });
+    if (_state == SocketState::CLOSED) return -1;
     return _recv_buffer.dequeue(buf, len);
 }
 
